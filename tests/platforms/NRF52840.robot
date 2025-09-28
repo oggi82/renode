@@ -89,11 +89,9 @@ Should Run ZephyrRTOS Shell On UARTE
 
 Should Run Alarm Sample
     Create Machine            ${NO_DMA}  zephyr_alarm_nRF52840.elf-s_489392-49a2ec3fda2f0337fe72521f08e51ecb0fd8d616
-    Create Terminal Tester    ${UART}
+    Create Terminal Tester    ${UART}  defaultPauseEmulation=True
 
     Execute Command           showAnalyzer ${UART}
-
-    Start Emulation
 
     Wait For Line On Uart     !!! Alarm !!!
     ${timeInfo}=              Execute Command    emulation GetTimeSourceInfo
@@ -316,3 +314,25 @@ Should Run Bluetooth sample
     Wait For Line On Uart     [SUBSCRIBED]                      testerId=${cen_uart}
     Wait For Line On Uart     [NOTIFICATION]                    testerId=${cen_uart}
 
+Should Run Bluetooth Hci Uart Sample
+    Execute Command           include @scripts/multi-node/nrf52840-ble-hci-uart-zephyr.resc
+
+    ${cen_uart}=              Create Terminal Tester                    ${UART}  machine=central_host
+    ${per_uart}=              Create Terminal Tester                    ${UART}  machine=peripheral_host
+
+    Wait For Line On Uart     *** Booting Zephyr OS build v3.6.0 ***    testerId=${cen_uart}
+    Wait For Line On Uart     *** Booting Zephyr OS build v3.6.0 ***    testerId=${per_uart}
+
+    Wait For Line On Uart     Bluetooth initialized                     testerId=${cen_uart}
+    Wait For Line On Uart     Bluetooth initialized                     testerId=${per_uart}
+
+    Wait For Line On Uart     Scanning successfully started             testerId=${cen_uart}
+    Wait For Line On Uart     Advertising successfully started          testerId=${per_uart}
+
+    Wait For Line On Uart     Connected:                                testerId=${cen_uart}
+    Wait For Line On Uart     Connected                                 testerId=${per_uart}
+
+    Wait For Line On Uart     HRS notifications enabled                 testerId=${per_uart}
+
+    Wait For Line On Uart     [SUBSCRIBED]                              testerId=${cen_uart}
+    Wait For Line On Uart     [NOTIFICATION]                            testerId=${cen_uart}

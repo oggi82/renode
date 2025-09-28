@@ -24,14 +24,12 @@ Create Platform
 Expect Value Read From Address
     [Arguments]                     ${address}  ${value}
     Execute Command                 cpu PC ${START_PC}
-    Execute Command                 cpu SetRegisterUnsafe ${a0} ${address}
+    Execute Command                 cpu SetRegister ${a0} ${address}
     Execute Command                 sysbus WriteDoubleWord ${START_PC} 0x52583  # lw a1, 0(a0)
 
-    Execute Command                 cpu ExecutionMode SingleStepBlocking
-    Execute Command                 start
     Execute Command                 cpu Step
 
-    ${val}=                         Execute Command   cpu GetRegisterUnsafe ${a1}
+    ${val}=                         Execute Command   cpu GetRegister ${a1}
     Should Be Equal As Integers     ${val}  ${value}
 
 Write Range With Doublewords
@@ -129,10 +127,10 @@ Can Reset The Windows
     ${range_end}=                   Execute Command    cpu GetMmuWindowEnd ${window2}
     ${addend}=                      Execute Command    cpu GetMmuWindowAddend ${window2}
     ${priv}=                        Execute Command    cpu GetMmuWindowPrivileges ${window2}
-    Should Be Equal As Integers     0  ${range_start}
-    Should Be Equal As Integers     0  ${range_end}
-    Should Be Equal As Integers     0  ${addend}
-    Should Be Equal As Integers     0  ${priv}
+    Should Be Equal As Integers     0  ${range_start}  "Range start incorrect"
+    Should Be Equal As Integers     0  ${range_end}  "Range end incorrect"
+    Should Be Equal As Integers     0  ${addend}  "Range adden incorrect"
+    Should Be Equal As Integers     0  ${priv}  "Range privileges incorrect"
 
     # Surrounding windows should remain untouched
     ${range_start}=                 Execute Command    cpu GetMmuWindowStart ${window1}
@@ -185,7 +183,7 @@ Fault Callback Works Only When Enabled
 
 Peripheral Can Be Attached To The Sysbus
     Create Platform
-    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; startAddress: 0x0; windowSize: 0x1000; numberOfWindows: 4}"
+    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; numberOfWindows: 4}"
     Define Window In Peripheral     mmu1  0  0x0  0x1000  0x0  ${PRIV_EXEC_ONLY}
     Provides                        SingleMMU
 
@@ -198,8 +196,8 @@ Peripheral Can Be Configured Using The Registers Inteface
 
 CPU Can Have Two MMUs
     Create Platform
-    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; startAddress: 0x0; windowSize: 0x1000; numberOfWindows: 2}"
-    Execute Command                 machine LoadPlatformDescriptionFromString "mmu2: Miscellaneous.ExternalWindowMMU @ sysbus 0x47001000 {cpu: cpu; startAddress: 0x1000; windowSize: 0x1000; numberOfWindows: 2}"
+    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; numberOfWindows: 2}"
+    Execute Command                 machine LoadPlatformDescriptionFromString "mmu2: Miscellaneous.ExternalWindowMMU @ sysbus 0x47001000 {cpu: cpu; numberOfWindows: 2}"
     Define Window In Peripheral     mmu1  0  0x0  0x1000  0x0  ${PRIV_EXEC_ONLY}
     Define Window In Peripheral     mmu2  0  0x0  0x1000  0x0  ${PRIV_EXEC_ONLY}
     Provides                        TwoMmus
@@ -222,14 +220,15 @@ Peripheral Does Not Throw When no_page_fault Is Set
     Execute Command                 logLevel 0 mmu1
 
     # cpu TranslateAddress uses the cpu_handle_mmu_fault with no_page_fault set to 1
-    ${returned value}=              Execute Command  cpu TranslateAddress 0x1100 Read
-    Should Be Equal As Integers     ${returned value}    ${-1u64}
+    Run Keyword And Expect Error
+    ...   *Failed to translate address*
+    ...   Execute Command  cpu TranslateAddress 0x1100 Read
     Should Not Be In Log            mmu1: MMU fault occured
 
 Peripheal Throws On Illegal Instruction Fetch
     Create Platform
     Create Log Tester               0
-    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; startAddress: 0x0; windowSize: 0x1000; numberOfWindows: 4}"
+    Execute Command                 machine LoadPlatformDescriptionFromString "mmu1: Miscellaneous.ExternalWindowMMU @ sysbus 0x47000000 {cpu: cpu; numberOfWindows: 4}"
     Define Window In Peripheral     mmu1  1  0x0000  0x1000  0x0000  ${PRIV_WRITE_ONLY}
     Execute Command                 logLevel 0 mmu1
 
@@ -267,7 +266,7 @@ Second MMU Throws On Fault In Its Window
 Execution Stops On Fault
     Requires                        SingleMMU
     Write Range With Doublewords    0x0  0x1000  0x13 # Nop sled on whole page
-    Execute Command                 cpu SetRegisterUnsafe ${a0} 0x1C
+    Execute Command                 cpu SetRegister ${a0} 0x1C
     Execute Command                 sysbus WriteDoubleWord 0x1C 0x52583  # lw a1, 0(a0)
     Execute Command                 sysbus WriteDoubleWord 0x20 0xd02503 # lw a2, 0(zero)
     Start Emulation
@@ -277,5 +276,15 @@ Execution Stops On Fault
     ${pc}=                          Execute Command   cpu PC
     Should Be Equal As integers     ${pc}  0x1C
     # Assert that the second insn was not executed
-    ${val}=                         Execute Command   cpu GetRegisterUnsafe ${a2}
+    ${val}=                         Execute Command   cpu GetRegister ${a2}
     Should Be Equal As Integers     ${val}  0x0
+
+Throws When Window Is Out Of Range
+    Requires                        SingleMMU
+    Run Keyword And Expect Error    *Address is outside of the possible range.*
+    ...                             Define Typed Window Using CPU API  0x0  0x100001000  0x0  ${PRIV_ALL}  ${PRIV_ALL}
+
+Works With The Last Page Of Memory
+    Requires                        SingleMMU
+    Define Typed Window Using CPU API  0x0  0x100000000  0x0  ${PRIV_EXEC_ONLY}  ${PRIV_EXEC_ONLY}
+    Execute Command                 sysbus ReadWord 0xFFFFFFFF

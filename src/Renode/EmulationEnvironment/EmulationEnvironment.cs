@@ -1,12 +1,13 @@
 ﻿//
-// Copyright (c) 2010-2018 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
-//  This file is licensed under the MIT License.
-//  Full license text is available in 'licenses/MIT.txt'.
+// This file is licensed under the MIT License.
+// Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Antmicro.Migrant;
 using Antmicro.Migrant.Hooks;
 using Antmicro.Renode.Core;
@@ -90,6 +91,7 @@ namespace Antmicro.Renode.EmulationEnvironment
             {
                 return sensorValueAndUpdateDelegates[typeof(ITemperatureSensor)].Value;
             }
+
             set
             {
                 sensorValueAndUpdateDelegates[typeof(ITemperatureSensor)].Value = value;
@@ -103,6 +105,7 @@ namespace Antmicro.Renode.EmulationEnvironment
             {
                 return sensorValueAndUpdateDelegates[typeof(IHumiditySensor)].Value;
             }
+
             set
             {
                 sensorValueAndUpdateDelegates[typeof(IHumiditySensor)].Value = value;

@@ -4,13 +4,13 @@ ${PROMPT}                                zynq>
 ${UART}                                  sysbus.uart0
 ${SCRIPT}                                ${CURDIR}/../../../scripts/single-node/zynq_verilated_fpga_isp.resc
 ${PLATFORM}                              @platforms/boards/mars_zx3.repl
-${FPGA_ISP_NATIVE_LINUX}                 @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--libVfpga_isp-Linux-x86_64-2761546208.so-s_2469096-d8cc8cf568b66378feb8be1728b48dfc715bf38e
-${FPGA_ISP_NATIVE_WINDOWS}               @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--libVfpga_isp-Windows-x86_64-2761546208.dll-s_3486606-c3c342394dabb4d4bb3a6ae9c7773765f1a9d30a
-${FPGA_ISP_NATIVE_MACOS}                 @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--libVfpga_isp-macOS-x86_64-2761546208.dylib-s_461448-e6e5a34d7850adba9c3d365a768151256096edad
-${BIN_VM}                                @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--vmlinux-s_13735336-6a3e10bd5b6d301cc8846490cad6de9ec541e067
-${ROOTFS}                                @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--rootfs.ext2-s_33554432-cc9664564461b5be36a4d1841e50a760dc7f5ad1
-${DTB}                                   @https://dl.antmicro.com/projects/renode/zynq-verilated-fpga-isp--video-board.dtb-s_13451-bdb696327471e2247f811b03f37be84df994379a
-${VIRTIO}                                @https://dl.antmicro.com/projects/renode/empty-ext4-filesystem.img-s_33554432-1eb65a808612389cc35a69b81178fbad5708a863
+${FPGA_ISP_NATIVE_LINUX}                 ${URI}/libVfpga_isp-Linux-x86_64-12904733885.so-s_2507680-9d567ef5ddf2569d75b2d90abd6acbfe12ffbfd4
+${FPGA_ISP_NATIVE_WINDOWS}               ${URI}/libVfpga_isp-Windows-x86_64-12904733885.dll-s_3690794-0986cf74a6351ec50710e40372316d5712659531
+${FPGA_ISP_NATIVE_MACOS}                 ${URI}/libVfpga_isp-macOS-x86_64-12904733885.dylib-s_470408-8a990124cc9ce7bd7235bef19210c2b99ba31131
+${BIN_VM}                                ${URI}/zynq-verilated-fpga-isp--vmlinux-s_13735336-6a3e10bd5b6d301cc8846490cad6de9ec541e067
+${ROOTFS}                                ${URI}/zynq-verilated-fpga-isp--rootfs.ext2-s_33554432-cc9664564461b5be36a4d1841e50a760dc7f5ad1
+${DTB}                                   ${URI}/zynq-verilated-fpga-isp--video-board.dtb-s_13451-bdb696327471e2247f811b03f37be84df994379a
+${VIRTIO}                                ${URI}/empty-ext4-filesystem.img-s_33554432-1eb65a808612389cc35a69b81178fbad5708a863
 ${FASTVDMA_DRIVER}                       /lib/modules/5.15.0-xilinx/kernel/drivers/dma/fastvdma/fastvdma.ko
 ${DEMOSAICER_DRIVER}                     /lib/modules/5.15.0-xilinx/kernel/drivers/media/platform/demosaicer/zynq_demosaicer.ko
 
@@ -65,6 +65,7 @@ Verify Images
 
 FPGA ISP Debayer On Native Communication
     [Documentation]                      Test FPGA ISP debayering.
+    [Tags]                          skip_host_arm
 
     Create Machine
     Start Emulation

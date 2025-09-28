@@ -1,5 +1,6 @@
 ********************************** Variables **********************************
 
+${UART}                                sysbus.uart0
 ${URI}                                 @https://dl.antmicro.com/projects/renode
 
 ### CPSR
@@ -26,6 +27,7 @@ ${INITIAL_CPSR_E_VALUE}                0x0
 ### SCTLR
 
 ${SCTLR_V_MASK}                        ${{ 1 << 13 }}
+${SCTLR_M_MASK}                        ${{ 1 << 0 }}
 
 ### Privilege Level
 
@@ -55,6 +57,20 @@ ${HIVECS_DUMMY_MEMORY}                                                         S
 ...  \ \ \ \ size: 0x1000                                                      ${\n}
 ...  """
 
+
+### SMP
+
+${GIC_V2_SMP}                                                                                                           SEPARATOR=
+...  """                                                                                                                ${\n}
+...  using "platforms/cpus/cortex-r52_smp_4.repl"                                                                       ${\n}
+...                                                                                                                     ${\n}
+...  gic: @ {                                                                                                           ${\n}
+...  ${SPACE*4}sysbus new Bus.BusMultiRegistration { address: 0xAF000000; size: 0x010000; region: \"distributor\" };    ${\n}
+...  ${SPACE*4}sysbus new Bus.BusMultiRegistration { address: 0xAF100000; size: 0x200000; region: \"cpuInterface\" }    ${\n}
+...  }                                                                                                                  ${\n}
+...  ${SPACE*4}architectureVersion: IRQControllers.ARM_GenericInterruptControllerVersion.GICv2                          ${\n}
+...  """
+
 *********************************** Keywords **********************************
 
 ### Stateless Keywords (do not depend on the current state of the simulation)
@@ -62,12 +78,12 @@ ${HIVECS_DUMMY_MEMORY}                                                         S
 Get Updated Register Value
     [Arguments]                        ${reg_val}  ${mask}  ${new_val}
     ${result}=                         Set Variable  ${{ (${reg_val} & ~${mask}) | (${new_val} & ${mask}) }}
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get Register Field Value
     [Arguments]                        ${reg_val}  ${mask}
     ${result}=                         Set Variable  ${{ ${reg_val} & ${mask} }}
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get CPSR Field Value
     [Arguments]                        ${cpsr}  ${field}
@@ -104,7 +120,7 @@ Get CPSR Field Value
     ELSE
         Fail  Unexpected CPSR Field Name: "${field}"
     END
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get CPSR Mode Value From Privilege Level Name
     [Arguments]                        ${pl}
@@ -129,20 +145,20 @@ Get CPSR Mode Value From Privilege Level Name
     ELSE
         Fail  Unexpected Privilege Level Name: "${pl}"
     END
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get CPSR For Changed Privilege Level
     [Arguments]                        ${pl}  ${cpsr}
     ${mode_val}=                       Get CPSR Mode Value From Privilege Level Name  ${pl}
     ${new_cpsr}=                       Get Updated Register Value  ${cpsr}  ${CPSR_MODE_MASK}  ${mode_val}
-    [Return]                           ${new_cpsr}
+    RETURN                             ${new_cpsr}
 
 Get CPSR After Changing To Wrong Mode
     [Arguments]                        ${old_cpsr}  ${new_cpsr}
     ${mask}=                           Set Variable  ${{ ~${CPSR_MODE_MASK} }}
     ${new_cpsr}                        Set Variable  ${{ ${new_cpsr} | ${CPSR_IL_MASK} }}
     ${result}=                         Get Updated Register Value  ${old_cpsr}  ${mask}  ${new_cpsr}
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get Exception Handler Offset From Hypervisor Vector Table
     [Arguments]                                            ${exception_type}
@@ -163,7 +179,7 @@ Get Exception Handler Offset From Hypervisor Vector Table
     ELSE
         Fail  Unexpected Exception Type Name: "${exception_type}"
     END
-    [Return]                                               ${offset}
+    RETURN                                                 ${offset}
 
 Get Exception Handler Offset From Non-Secure Vector Table
     [Arguments]                                            ${exception_type}
@@ -182,7 +198,7 @@ Get Exception Handler Offset From Non-Secure Vector Table
     ELSE
         Fail  Unexpected Exception Type Name: "${exception_type}"
     END
-    [Return]                                               ${offset}
+    RETURN                                                 ${offset}
 
 Get Exception Handler Offset
     [Arguments]                                            ${pl}  ${excp_type}
@@ -191,24 +207,24 @@ Get Exception Handler Offset
     ELSE
         ${offset}=                                         Get Exception Handler Offset From Non-Secure Vector Table  ${excp_type}
     END
-    [Return]                                               ${offset}
+    RETURN                                                 ${offset}
 
 Convert Integer To Hex String
     [Arguments]                        ${value}
     ${result}=                         Convert To Hex  ${value}  prefix=0x
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Contains Substring
     [Arguments]                        ${str}  ${substr}
     ${result}=                         Run Keyword And Return Status  Should Contain  ${str}  ${substr}
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 ### Stateful Keywords (they depend on the current state of the simulation)
 
 Get Current CPSR Value
     ${cpsr}=                           Execute Command  sysbus.cpu CPSR
     ${cpsr}=                           Convert To Integer  ${cpsr}
-    [Return]                           ${cpsr}
+    RETURN                             ${cpsr}
 
 Set Current CPSR Value
     [Arguments]                        ${value}
@@ -218,7 +234,7 @@ Set Current CPSR Value
 Get Current Privilege Level Value
     ${cpsr}=                           Get Current CPSR Value
     ${mode}=                           Get Register Field Value  ${cpsr}  ${CPSR_MODE_MASK}
-    [Return]                           ${mode}
+    RETURN                             ${mode}
 
 Set Current Privilege Level Value
     [Arguments]                        ${pl}
@@ -230,7 +246,7 @@ Set Current Privilege Level Value
 Get Current PC Value
     ${pc}=                             Execute Command  sysbus.cpu PC
     ${pc}=                             Convert To Integer  ${pc}
-    [Return]                           ${pc}
+    RETURN                             ${pc}
 
 Set Current PC Value
     [Arguments]                        ${value}
@@ -241,14 +257,14 @@ Get Current CPSR Field Value
     [Arguments]                        ${field}
     ${cpsr}=                           Get Current CPSR Value
     ${result}=                         Get CPSR Field Value  ${cpsr}  ${field}
-    [Return]                           ${result}
+    RETURN                             ${result}
 
 Get Current System Register Value
     [Arguments]                                            ${reg_name}
     ${reg_value}=                                          Execute Command  sysbus.cpu GetSystemRegisterValue \"${reg_name}\"
     ${result}=                                             Convert To Integer  ${reg_value}
     Check For Register Errors In Last Log                  ${reg_name}
-    [Return]                                               ${result}
+    RETURN                                                 ${result}
 
 Set Current System Register Value
     [Arguments]                                            ${reg_name}  ${value}
@@ -298,6 +314,16 @@ Reset CPU
 Enable Hivecs
     ${sctlr}=                          Get Current System Register Value  SCTLR
     ${sctlr}=                          Get Updated Register Value  ${sctlr}  ${SCTLR_V_MASK}  ${SCTLR_V_MASK}
+    Set Current System Register Value  SCTLR  ${sctlr}
+
+Enable EL2 MPU
+    ${sctlr}=                          Get Current System Register Value  HSCTLR
+    ${sctlr}=                          Get Updated Register Value  ${sctlr}  ${SCTLR_M_MASK}  ${SCTLR_M_MASK}
+    Set Current System Register Value  HSCTLR  ${sctlr}
+
+Enable EL1 MPU
+    ${sctlr}=                          Get Current System Register Value  SCTLR
+    ${sctlr}=                          Get Updated Register Value  ${sctlr}  ${SCTLR_M_MASK}  ${SCTLR_M_MASK}
     Set Current System Register Value  SCTLR  ${sctlr}
 
 Unmask Exception
@@ -369,7 +395,7 @@ Current System Register Value Should Be
 
 Initialize Emulation
     [Arguments]                                            ${exec_mode}=Continuous  ${pl}=default  ${pc}=default  ${elf}=default
-    ...                                                    ${binary}=default  ${create_uart_tester}=False
+    ...                                                    ${binary}=default  ${create_uart_tester}=False  ${map_memory}=False
 
     # Tests assume Renode prints HEX numbers.
     Execute Command                                        numbersMode Hexadecimal
@@ -377,6 +403,25 @@ Initialize Emulation
     Execute Command                                        mach create
     Execute Command                                        machine LoadPlatformDescription @platforms/cpus/cortex-r52.repl
     Execute Command                                        sysbus.cpu ExecutionMode ${exec_mode}
+
+    # Map all addresses as read/write and executable for EL2, EL1, and EL0
+    IF  ${map_memory}
+        # Set Attr0 to Normal, Outer-Read and -Write
+        Set Current System Register Value                  MAIR0  0x70
+        # Set base address to 0, Outer Shareable, and Read-Write at EL1 and EL0, and disable execute never
+        Set Current System Register Value                  PRBAR  0x12
+        # Set limit address to 0xFFFFFFFF, select Attr0, and enable the region
+        Set Current System Register Value                  PRLAR  0xFFFFFFC1
+        Enable EL1 MPU
+
+        # Set Attr0 to Normal, Outer-Read and -Write
+        Set Current System Register Value                  HMAIR0  0x70
+        # Set base address to 0, Outer Shareable, and Read-Write at EL2, EL1, and EL0, and disable execute never
+        Set Current System Register Value                  HPRBAR  0x12
+        # Set limit address to 0xFFFFFFFF, select Attr0, and enable the region
+        Set Current System Register Value                  HPRLAR  0xFFFFFFC1
+        Enable EL2 MPU
+    END
 
     IF  "${elf}" != "default"
         Execute Command                                    sysbus LoadELF ${elf}
@@ -395,8 +440,8 @@ Initialize Emulation
     END
 
     IF  ${create_uart_tester}
-        Create Terminal Tester                             sysbus.uart0
-        Execute Command                                    showAnalyzer sysbus.uart0
+        Create Terminal Tester                             ${UART}  defaultPauseEmulation=True
+        Execute Command                                    showAnalyzer ${UART}
     END
 
 Check If CPSR Contains Reset Values
@@ -446,7 +491,7 @@ Check Debug Exceptions Template
         Fail  Unexpected instruction: "${instruction}"
     END
 
-    Initialize Emulation                                   pc=0x8000  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pc=0x8000  exec_mode=SingleStep
     Write Opcode To Address                                0x8000  0xE3080010  # mov r0, #0x8010  @ HANDLER_ADDRESS
     Write Opcode To Address                                0x8004  0xEE8C0F10  # mcr p15, 4, r0, c12, c0, 0  @ set HVBAR
     Write Opcode To Address                                0x8008  ${opcode}  # instruction #0
@@ -474,7 +519,7 @@ Check Synchronous Exceptions Handling Template
     ${EXCEPTION_HANDLER_OFFSET}=                           Get Exception Handler Offset  ${pl}  ${exception_type}
     ${EXPECTED_PC}=                                        Set Variable  ${{ ${EXCEPTION_HANDLER_BASE_ADDRESS} + ${EXCEPTION_HANDLER_OFFSET} }}
 
-    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStep  map_memory=True
     Unmask Exception                                       ${exception_type}
     Start Emulation
 
@@ -490,7 +535,7 @@ Check Asynchronous Exceptions Handling Template
     ${EXCEPTION_HANDLER_OFFSET}=                           Get Exception Handler Offset  ${pl}  ${exception_type}
     ${EXPECTED_PC}=                                        Set Variable  ${{ ${EXCEPTION_HANDLER_BASE_ADDRESS} + ${EXCEPTION_HANDLER_OFFSET} }}
 
-    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStep
     Unmask Exception                                       ${exception_type}
     Start Emulation
 
@@ -535,7 +580,7 @@ Check Value Of System Registers After Reset Template
 Check Access To SPSR_hyp Register Template
     [Arguments]                                            ${pl}
 
-    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStep  map_memory=True
     Write Opcode To Address                                0x8000  0xe16ef300  # msr SPSR_hyp, r0
     Start Emulation
 
@@ -557,7 +602,7 @@ Check Access To SPSR_hyp Register Template
 Check Access To ELR_hyp Template
     [Arguments]                                            ${pl}  ${expected_access_allowed}
 
-    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStep  map_memory=True
     Write Opcode To Address                                0x8000  0xe30c0afe  # movw    r0, #51966      ; 0xcafe
     Write Opcode To Address                                0x8004  0xe12ef300  # msr     ELR_hyp, r0
     Write Opcode To Address                                0x8008  0xe10e1300  # mrs     r1, ELR_hyp
@@ -581,7 +626,7 @@ Check CPSR_c Instruction Changing Privilege Level To User Template
     ${TARGET_CPSR}=                                        Set Variable  0x40000110
     ${EXPECTED_PC}=                                        Set Variable  0x8004
 
-    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  pc=0x8000  exec_mode=SingleStep  map_memory=True
     Write Opcode To Address                                0x8000  0xe321f010  # msr CPSR_c, #16
     Start Emulation
 
@@ -607,7 +652,7 @@ Check VBAR Register Usage By IRQ Template
     ${IRQ_HANDLER_OFFSET}=                                 Set Variable  0x18
     ${EXPECTED_PC}=                                        Set Variable  ${{ ${EXCEPTION_VECTOR_ADDRESS} + ${IRQ_HANDLER_OFFSET} }}
 
-    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStep
     Unmask Exception                                       IRQ
     Start Emulation
 
@@ -626,7 +671,7 @@ Check High Exception Vectors Usage By IRQ Template
     ${IRQ_HANDLER_OFFSET}=                                 Set Variable  0x18
     ${EXPECTED_PC}=                                        Set Variable  ${{ ${IRQ_HANDLER_BASE} + ${IRQ_HANDLER_OFFSET} }}
 
-    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStep  map_memory=True
     Add Dummy Memory At Hivecs Base Address                # Prevent CPU abort error when trying to execute code from hivecs addresses
     Unmask Exception                                       IRQ
     Enable Hivecs
@@ -644,7 +689,7 @@ Check High Exception Vectors Usage By IRQ Template
 Check Protection Region Address Register Access Template
     [Arguments]                                            ${pl}  ${reg_type}  ${region_num}
 
-    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStepBlocking
+    Initialize Emulation                                   pl=${pl}  exec_mode=SingleStep
     Start Emulation
 
     IF  "${reg_type}" == "Base" or "${reg_type}" == "BAR"
@@ -672,6 +717,17 @@ Check Protection Region Address Register Access Template
 ********************************** Test Cases *********************************
 
 ### Prerequisites
+
+Should Get Correct EL and SS on CPU Creation
+    # This platform uses `Cortex-R52` CPU - ARMv8R in AArch32 configuration
+    # We only check if EL and SS are reflected correctly on C# side, for their usage in peripherals
+    Initialize Emulation
+
+    ${ss}=                             Execute Command  sysbus.cpu SecurityState
+    ${el}=                             Execute Command  sysbus.cpu ExceptionLevel
+
+    Should Be Equal As Strings         ${ss.split()[0].strip()}  NonSecure
+    Should Be Equal As Strings         ${el.split()[0].strip()}  EL2_HypervisorMode
 
 Check Changing Privilege Level From Monitor
     [Template]                         Check Changing Privilege Level From Monitor Template
@@ -831,7 +887,6 @@ Run Zephyr Hello World Sample
 
     Initialize Emulation               elf=${URI}/aemv8r_aarch32--zephyr-hello_world.elf-s_390996-d824c18d2044d741b7761f7ab27d3b49fae9a9e4
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              *** Booting Zephyr OS build ${SPACE}***
     Wait For Line On Uart              Hello World! fvp_baser_aemv8r_aarch32
@@ -841,7 +896,6 @@ Run Zephyr Synchronization Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-synchronization.elf-s_402972-0cd785e0ec32a0c9106dec5369ad36e4b4fb386f
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              thread_a: Hello World from cpu 0 on fvp_baser_aemv8r_aarch32!
@@ -854,7 +908,6 @@ Run Zephyr Philosophers Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-philosophers.elf-s_500280-b9bbb31c64dec3f3273535be657b8e4d7ca182f9
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Philosopher 0.*THINKING  treatAsRegex=true
     Wait For Line On Uart              Philosopher 0.*HOLDING  treatAsRegex=true
@@ -880,7 +933,6 @@ Run Zephyr User Space Hello World Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-userspace_hello_world_user.elf-s_1039836-cbc30725dd16eeb46c01b921f0c96e6a927c3669
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              Hello World from UserSpace! (fvp_baser_aemv8r_aarch32)
@@ -890,9 +942,14 @@ Run Zephyr User Space Prod Consumer Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-userspace_prod_consumer.elf-s_1291928-637dbadb671ac5811ed6390b6be09447e586bf82
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
+    Provides                           zephyr-userspace_prod_consumer-after-booting
+    Wait For Line On Uart              I: SUCCESS
+
+Test Resuming Zephyr User Space Prod Consumer After Deserialization
+    Requires                           zephyr-userspace_prod_consumer-after-booting
+    Execute Command                    showAnalyzer ${UART}
     Wait For Line On Uart              I: SUCCESS
 
 Run Zephyr User Space Shared Mem Sample
@@ -900,7 +957,6 @@ Run Zephyr User Space Shared Mem Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-userspace_shared_mem.elf-s_1096936-6da5eb0f22c62b0a23f66f68a4ba51b9ece6deff
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              PT Sending Message 1
@@ -919,7 +975,6 @@ Run Zephyr Basic Sys Heap Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-basic_sys_heap.elf-s_433924-f490ec4c563a8f553702b7203956bf961242d91b
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              allocated 0, free 196, max allocated 0, heap size 256
@@ -932,7 +987,6 @@ Run Zephyr Compression LZ4 Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-compression_lz4.elf-s_840288-1558c5d70a6fa74ffebf6fe8a31398d29af0d087
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              Successfully decompressed some data
@@ -943,7 +997,6 @@ Run Zephyr Cpp Synchronization Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-cpp_cpp_synchronization.elf-s_488868-3ac689f04acc81aaf0e10b7979f12a8d66ba73d7
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              Create semaphore 0x4e04
@@ -958,7 +1011,6 @@ Run Zephyr Kernel Condition Variables Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-kernel_condition_variables_condvar.elf-s_478952-6ef5d598b47ef8dd8a624ffb85e4cb60fc2c6736
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              Main(): Waited and joined with 3 threads. Final value of count = 145. Done.
@@ -968,7 +1020,6 @@ Run Zephyr Kernel Condition Variables Simple Sample
 
     Initialize Emulation               elf=${URI}/fvp_baser_aemv8r_aarch32--zephyr-kernel_condition_variables_simple.elf-s_476108-e8c6ccae3076acc95f23fc3c726b4bcb8e20fff1
     ...                                create_uart_tester=True
-    Start Emulation
 
     Wait For Line On Uart              Booting Zephyr OS build
     Wait For Line On Uart              [thread main] done == 20 so everyone is done
@@ -983,8 +1034,6 @@ Test Reading From Overlapping MPU Regions
     # MPU <0xCAFEB000,0xCAFEBFFF> that overlaps a default DEVICE region <0x80000000,0xFFFFFFFF>.
     Execute Command                    sysbus Tag <0xCAFEBEE0,0xCAFEBEE3> "MPU_TEST" 0xDEADCAFE
 
-    Start Emulation
-
     Wait For Line On Uart              *** Booting Zephyr OS build
     Wait For Line On Uart              Reading value from an address with overlapping MPU regions...
 
@@ -992,3 +1041,26 @@ Test Reading From Overlapping MPU Regions
     # See dump_fault in arch/arm/core/aarch32/cortex_a_r/fault.c.
     Wait For Line On Uart              DATA ABORT
     Wait For Line On Uart              Unknown (4)
+
+Run Zephyr SMP Pi Sample On 4 Cores with GICv3
+    [Tags]                             Demos
+
+    Execute Command                    i @platforms/cpus/cortex-r52_smp_4.repl
+    Execute Command                    sysbus LoadELF ${URI}/fvp_baser_aemv8r_aarch32--zephyr-arch-smp-pi.elf-s_610540-6034d4eb76ea1b158f34bdd92ffcff2365f2c2e6
+
+    Execute Command                    showAnalyzer ${UART}
+    Create Terminal Tester             ${UART}
+
+    Wait For Line On Uart              All 16 threads executed by 4 cores
+
+Run Zephyr SMP Pi Sample On 4 Cores with GICv2
+    [Tags]                             Demos
+
+    Execute Command                    mach create
+    Execute Command                    machine LoadPlatformDescriptionFromString ${GIC_V2_SMP}
+    Execute Command                    sysbus LoadELF ${URI}/fvp_baser_aemv8r_aarch32-gicv2--zephyr-arch-smp-pi.elf-s_597400-159126f83bc84cc4c34e1f4088774ba47fc0632e
+
+    Execute Command                    showAnalyzer ${UART}
+    Create Terminal Tester             ${UART}
+
+    Wait For Line On Uart              All 16 threads executed by 4 cores

@@ -1,21 +1,27 @@
 //
-// Copyright (c) 2010-2023 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
+using System.Collections.Generic;
 using System.Linq;
+
 using Antmicro.Renode.Core;
 using Antmicro.Renode.Peripherals.CPU;
+using Antmicro.Renode.Peripherals.Miscellaneous;
 using Antmicro.Renode.PlatformDescription;
 using Antmicro.Renode.PlatformDescription.Syntax;
-using Antmicro.Renode.Utilities;
-using Moq;
-using NUnit.Framework;
+using Antmicro.Renode.Tests.UnitTests.Mocks;
 using Antmicro.Renode.UnitTests.Mocks;
+using Antmicro.Renode.Utilities;
+
+using Moq;
+
+using NUnit.Framework;
+
 using static Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithEnumAttribute;
-using System.Security.Policy;
 
 namespace Antmicro.Renode.UnitTests.PlatformDescription
 {
@@ -113,7 +119,7 @@ cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus
 cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus
     Placeholder: '''this is
 multiline
-string'''";  
+string'''";
 
             ProcessSource(source);
             MockCPU mock;
@@ -292,7 +298,7 @@ not a single line '''";
             var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
             Assert.AreEqual(ParsingError.SyntaxError, exception.Error);
             var position = exception.Message.Split(new string[] { Environment.NewLine }, StringSplitOptions.None)[1];
-            Assert.AreEqual("At 4:18:", position);
+            Assert.AreEqual("At 3:37:", position);
         }
 
         [Test]
@@ -349,6 +355,24 @@ not a single line '''";
             MockCPU mock;
             Assert.IsTrue(machine.TryGetByName("sysbus.cpu", out mock));
             Assert.AreEqual("this is \'''\nnot a single line ", mock.Placeholder);
+        }
+
+        [Test]
+        public void ShouldNotTreatDoubleSlashInMultilineStringAsComment()
+        {
+            var source = @"
+cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus
+    Placeholder: ''' // this is //
+// not
+a comment // neither is this
+or //this
+or// this
+or this // '''";
+
+            ProcessSource(source);
+            MockCPU mock;
+            Assert.IsTrue(machine.TryGetByName("sysbus.cpu", out mock));
+            Assert.AreEqual(" // this is //\n// not\na comment // neither is this\nor //this\nor// this\nor this // ", mock.Placeholder);
         }
 
         [Test, Ignore("Ignored")]
@@ -448,6 +472,32 @@ mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithObjectAt
         }
 
         [Test]
+        public void ShouldHandleEmptyListValue()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntList: empty";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+            Assert.AreEqual(default(List<int>), mockPeripheral.MockIntList);
+        }
+
+        [Test]
+        public void ShouldHandleEmptyArrayValue()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntArray: empty";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+            Assert.AreEqual(default(int[]), mockPeripheral.MockIntArray);
+        }
+
+        [Test]
         public void ShouldHandleEmptyBoolValue()
         {
             var source = @"
@@ -544,10 +594,128 @@ sender:
         }
 
         [Test]
+        public void ShouldHandleEmptyListOfIntegers()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntList: []";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            Assert.IsNotNull(mockPeripheral.MockIntList);
+            CollectionAssert.IsEmpty(mockPeripheral.MockIntList);
+        }
+
+        [Test]
+        public void ShouldHandleListOfIntegers()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntList: [2, 1, 37]";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            CollectionAssert.AreEqual(new[] { 2, 1, 37 }, mockPeripheral.MockIntList);
+        }
+
+        [Test]
+        public void ShouldHandleArrayOfIntegers()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntArray: [1, 2, 34]";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            CollectionAssert.AreEqual(new[] { 1, 2, 34 }, mockPeripheral.MockIntArray);
+        }
+
+        [Test]
+        public void ShouldHandleListOfStrings()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockStringList: [""a"", ""b"", ""c""]";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            CollectionAssert.AreEqual(new[] { "a", "b", "c" }, mockPeripheral.MockStringList);
+        }
+
+        [Test]
+        public void ShouldFailOnTypeMismatchInList()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntList: [1, ""b"", 3]";
+
+            var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
+            Assert.AreEqual(ParsingError.TypeMismatch, exception.Error);
+        }
+
+        [Test]
+        public void ShouldFailOnTypeMismatchInArray()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntArray: [1, ""b"", 3]";
+
+            var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
+            Assert.AreEqual(ParsingError.TypeMismatch, exception.Error);
+        }
+
+        [Test]
+        public void ShouldReplaceList()
+        {
+            var source = @"
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockIntList: [1, 2, 3]
+
+mockPeripheral:
+    mockIntList: [4, 5]";
+
+            ProcessSource(source);
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            CollectionAssert.AreEqual(new[] { 4, 5 }, mockPeripheral.MockIntList);
+        }
+
+        [Test]
+        public void ShouldHandleListOfReferences()
+        {
+            var source = @"
+cpu1: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus
+cpu2: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus
+
+mockPeripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MockPeripheralWithCollectionAttributes @ sysbus  <0, 1>
+    mockCpuList: [cpu1, cpu2]";
+
+            ProcessSource(source);
+            MockCPU cpu1, cpu2;
+            MockPeripheralWithCollectionAttributes mockPeripheral;
+            Assert.IsTrue(machine.TryGetByName("sysbus.cpu1", out cpu1));
+            Assert.IsTrue(machine.TryGetByName("sysbus.cpu2", out cpu2));
+            Assert.IsTrue(machine.TryGetByName("sysbus.mockPeripheral", out mockPeripheral));
+
+            Assert.AreEqual(2, mockPeripheral.MockCpuList.Count);
+            Assert.AreSame(cpu1, mockPeripheral.MockCpuList[0]);
+            Assert.AreSame(cpu2, mockPeripheral.MockCpuList[1]);
+        }
+
+        [Test]
         public void ShouldHandleManyMultiplexedMultiDestinationInterrupts()
         {
             var source = @"
-sender: Antmicro.Renode.UnitTests.Mocks.MockGPIOByNumberConnectorPeripheral @ sysbus <0, 1>
+sender: Antmicro.Renode.UnitTests.Mocks.MockGPIOByNumberConnectorPeripheral @ sysbus <3, 4>
     gpios: 2
     [0, Irq] -> receiver@[1-2] | receiver2@[3-4] | receiver3@[5-6]
 receiver: Antmicro.Renode.UnitTests.Mocks.MockReceiver @ sysbus <0, 1>
@@ -619,8 +787,8 @@ using ""A""
 
 sender:
     [Irq, 3-4] -> receiver2@[0-2]
-    6 -> receiver@7
-    [7-8] -> receiver@[8-9]
+    6 -> receiver@16
+    [7-8] -> receiver@[17-18]
 ";
 
             ProcessSource(source, a);
@@ -646,12 +814,34 @@ sender:
             Assert.AreEqual(receiver2, sender.Connections[4].Endpoints[0].Receiver);
             Assert.AreEqual(5, sender.Connections[5].Endpoints[0].Number);
             Assert.AreEqual(receiver1, sender.Connections[5].Endpoints[0].Receiver);
-            Assert.AreEqual(7, sender.Connections[6].Endpoints[0].Number);
+            Assert.AreEqual(16, sender.Connections[6].Endpoints[0].Number);
             Assert.AreEqual(receiver1, sender.Connections[6].Endpoints[0].Receiver);
-            Assert.AreEqual(8, sender.Connections[7].Endpoints[0].Number);
+            Assert.AreEqual(17, sender.Connections[7].Endpoints[0].Number);
             Assert.AreEqual(receiver1, sender.Connections[7].Endpoints[0].Receiver);
-            Assert.AreEqual(9, sender.Connections[8].Endpoints[0].Number);
+            Assert.AreEqual(18, sender.Connections[8].Endpoints[0].Number);
             Assert.AreEqual(receiver1, sender.Connections[8].Endpoints[0].Receiver);
+        }
+
+        [Test]
+        public void ShouldCombineIfInterruptUsedSecondTimeInEntryAsDestination()
+        {
+            var source = @"
+receiver: Antmicro.Renode.UnitTests.Mocks.MockReceiver @ sysbus
+sender: Antmicro.Renode.UnitTests.Mocks.MockIrqSenderWithTwoInterrupts @ sysbus
+    Irq -> receiver@0
+    AnotherIrq -> receiver@0";
+
+            ProcessSource(source);
+            Assert.IsTrue(machine.TryGetByName("sysbus.sender", out MockIrqSenderWithTwoInterrupts sender));
+            Assert.IsTrue(machine.TryGetByName("sysbus.receiver", out MockReceiver receiver));
+
+            Assert.AreEqual(0, sender.Irq.Endpoints[0].Number);
+            Assert.AreEqual(1, sender.AnotherIrq.Endpoints[0].Number);
+            Assert.IsInstanceOf(typeof(CombinedInput), sender.Irq.Endpoints[0].Receiver);
+            var combiner = (CombinedInput)sender.Irq.Endpoints[0].Receiver;
+            Assert.AreEqual(0, combiner.OutputLine.Endpoints[0].Number);
+            Assert.AreEqual(receiver, combiner.OutputLine.Endpoints[0].Receiver);
+            Assert.AreEqual(combiner, sender.AnotherIrq.Endpoints[0].Receiver);
         }
 
         [Test]
@@ -686,7 +876,7 @@ newCpu: Antmicro.Renode.UnitTests.Mocks.MockCPU @ sysbus 2
         }
 
         [Test]
-        public void  ShouldNotDetectCycleInPerCoreRegistration()
+        public void ShouldNotDetectCycleInPerCoreRegistration()
         {
             var source = @"
 core1_nvic: IRQControllers.NVIC @ sysbus new Bus.BusPointRegistration { 
@@ -711,7 +901,7 @@ cpu2: CPU.CortexM @ sysbus
         }
 
         [Test]
-        public void  ShouldNotDetectCycleInSignalConnection()
+        public void ShouldNotDetectCycleInSignalConnection()
         {
             var source = @"
 clint: IRQControllers.CoreLevelInterruptor @ {
@@ -741,7 +931,7 @@ peri:
         Increment";
 
             ProcessSource(source);
-            initHandlerMock.Verify(x => x.Execute(It.IsAny<IInitable>(), new[] { "Increment", "Increment" }, It.IsAny<Action<string>>()));
+            scriptHandlerMock.Verify(x => x.Execute(It.IsAny<IScriptable>(), new[] { "Increment", "Increment" }, It.IsAny<Action<string>>()));
         }
 
         [Test]
@@ -759,7 +949,7 @@ peri:
 
 
             ProcessSource(source);
-            initHandlerMock.Verify(x => x.Execute(It.IsAny<IInitable>(), new[] { "Increment", "Increment", "Increment" }, It.IsAny<Action<string>>()));
+            scriptHandlerMock.Verify(x => x.Execute(It.IsAny<IScriptable>(), new[] { "Increment", "Increment", "Increment" }, It.IsAny<Action<string>>()));
         }
 
         [Test]
@@ -771,7 +961,7 @@ sysbus:
         WriteByte 0 1";
 
             ProcessSource(source);
-            initHandlerMock.Verify(x => x.Execute(It.IsAny<IInitable>(), new[] { "WriteByte 0 1" }, It.IsAny<Action<string>>()));
+            scriptHandlerMock.Verify(x => x.Execute(It.IsAny<IScriptable>(), new[] { "WriteByte 0 1" }, It.IsAny<Action<string>>()));
         }
 
         [Test]
@@ -789,11 +979,46 @@ using ""A""
 peri:
     init:
         Increment";
-            
+
             var errorMessage = "Invalid init section";
-            initHandlerMock.Setup(x => x.Validate(It.IsAny<IInitable>(), out errorMessage)).Returns(false);
+            scriptHandlerMock.Setup(x => x.ValidateInit(It.IsAny<IScriptable>(), out errorMessage)).Returns(false);
             var exception = Assert.Throws<ParsingException>(() => ProcessSource(source, a));
             Assert.AreEqual(ParsingError.InitSectionValidationError, exception.Error);
+        }
+
+        [Test]
+        public void ShouldReplaceReset()
+        {
+            var source = @"
+peri: Antmicro.Renode.UnitTests.Mocks.EmptyPeripheral @ sysbus <0, 1>
+    reset:
+        Increment
+
+peri:
+    reset:
+        Increment
+        Increment";
+
+            ProcessSource(source);
+            scriptHandlerMock.Verify(x => x.RegisterReset(It.IsAny<IScriptable>(), new[] { "Increment", "Increment" }, It.IsAny<Action<string>>()));
+        }
+
+        [Test]
+        public void ShouldAddReset()
+        {
+            var source = @"
+peri: Antmicro.Renode.UnitTests.Mocks.EmptyPeripheral
+    reset:
+        Increment
+
+peri:
+    reset add:
+        Increment
+        Increment";
+
+
+            ProcessSource(source);
+            scriptHandlerMock.Verify(x => x.RegisterReset(It.IsAny<IScriptable>(), new[] { "Increment", "Increment", "Increment" }, It.IsAny<Action<string>>()));
         }
 
         [Test]
@@ -1088,6 +1313,27 @@ peripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MachineTestPeripheral @ sysbus
             Assert.DoesNotThrow(() => ProcessSource(source));
         }
 
+        [Test]
+        public void ShouldAcceptPreviousRegistrationPoint()
+        {
+            var source = @"
+mock: @ sysbus
+mock: Antmicro.Renode.UnitTests.Mocks.MockCPU";
+
+            Assert.DoesNotThrow(() => ProcessSource(source));
+        }
+
+        [Test]
+        public void ShouldRejectPreviousIncompatibleRegistrationPoint()
+        {
+            var source = @"
+mock: @ sysbus <0, 1>
+mock: Antmicro.Renode.UnitTests.Mocks.MockCPU";
+
+            var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
+            Assert.AreEqual(ParsingError.NoCtorForRegistrationPoint, exception.Error);
+        }
+
         [OneTimeSetUp]
         public void Init()
         {
@@ -1103,9 +1349,9 @@ peripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MachineTestPeripheral @ sysbus
         {
             machine = new Machine();
             EmulationManager.Instance.CurrentEmulation.AddMachine(machine, "machine");
-            initHandlerMock = new Mock<IInitHandler>();
+            scriptHandlerMock = new Mock<IScriptHandler>();
             string nullMessage = null;
-            initHandlerMock.Setup(x => x.Validate(It.IsAny<IInitable>(), out nullMessage)).Returns(true);
+            scriptHandlerMock.Setup(x => x.ValidateInit(It.IsAny<IScriptable>(), out nullMessage)).Returns(true);
         }
 
         [TearDown]
@@ -1123,11 +1369,11 @@ peripheral: Antmicro.Renode.Tests.UnitTests.Mocks.MachineTestPeripheral @ sysbus
             {
                 usingResolver.With(letters[i - 1].ToString(), sources[i]);
             }
-            var creationDriver = new CreationDriver(machine, usingResolver, initHandlerMock.Object);
+            var creationDriver = new CreationDriver(machine, usingResolver, scriptHandlerMock.Object);
             creationDriver.ProcessDescription(sources[0]);
         }
 
-        private Mock<IInitHandler> initHandlerMock;
+        private Mock<IScriptHandler> scriptHandlerMock;
         private Machine machine;
     }
 }

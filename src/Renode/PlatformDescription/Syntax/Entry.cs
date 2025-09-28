@@ -1,29 +1,29 @@
 //
-// Copyright (c) 2010-2018 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using Antmicro.Migrant;
-using Sprache;
+using System.Linq;
 using System.Reflection;
+
+using Sprache;
 
 namespace Antmicro.Renode.PlatformDescription.Syntax
 {
-    public class Entry : IPositionAware<Entry>, IWithPosition, IPrefixable, IInitable
+    public class Entry : IPositionAware<Entry>, IWithPosition, IPrefixable, IScriptable
     {
         public Entry(string variableName, StringWithPosition type, IEnumerable<RegistrationInfo> registrationInfo, IEnumerable<Attribute> attributes, bool isLocal, StringWithPosition alias)
         {
             VariableName = variableName;
+            baseVariableName = variableName;
             Type = type;
             RegistrationInfos = registrationInfo;
             Attributes = attributes;
             IsLocal = isLocal;
             Alias = alias;
-
         }
 
         public Entry SetPos(Position startPos, int length)
@@ -36,14 +36,22 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public void Prefix(string with)
         {
-            VariableName = with + VariableName;
+            VariableName = with + baseVariableName;
         }
 
         public Entry MergeWith(Entry entry)
         {
-            if(entry.VariableName != VariableName || entry.Type != null || entry.Variable != null || Variable != null)
+            if(Type != null && entry.Type != null && Type.Value != entry.Type.Value)
             {
-                throw new InvalidOperationException("Internal error during entry merge.");
+                throw new InvalidOperationException($"Internal error during entry merge: merging entries of different types: {entry.Type?.Value} and {Type?.Value}.");
+            }
+            if(entry.VariableName != VariableName || entry.Variable != null || Variable != null)
+            {
+                throw new InvalidOperationException($"Internal error during entry merge: merging entries for different variables: {entry.VariableName} and {VariableName}.");
+            }
+            if(entry.Type != null)
+            {
+                Type = entry.Type;
             }
             if(entry.RegistrationInfos != null)
             {
@@ -78,6 +86,17 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
                 else if(ourInit != null)
                 {
                     mergedAttributes.Add(ourInit.Merge(theirInit));
+                }
+
+                var ourReset = Attributes.OfType<ResetAttribute>().SingleOrDefault();
+                var theirReset = entry.Attributes.OfType<ResetAttribute>().SingleOrDefault();
+                if(ourReset == null ^ theirReset == null)
+                {
+                    mergedAttributes.Add(ourReset ?? theirReset);
+                }
+                else if(ourReset != null)
+                {
+                    mergedAttributes.Add(ourReset.Merge(theirReset));
                 }
 
                 Attributes = mergedAttributes;
@@ -118,14 +137,25 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
         }
 
         public string VariableName { get; private set; }
+
         public StringWithPosition Type { get; private set; }
+
         public IEnumerable<RegistrationInfo> RegistrationInfos { get; private set; }
+
         public IEnumerable<Attribute> Attributes { get; private set; }
+
         public bool IsLocal { get; private set; }
+
         public Position StartPosition { get; private set; }
+
         public int Length { get; private set; }
+
         public StringWithPosition Alias { get; private set; }
+
         public ConstructorInfo Constructor { get; set; }
+
         public Variable Variable { get; set; }
+
+        private readonly string baseVariableName;
     }
 }

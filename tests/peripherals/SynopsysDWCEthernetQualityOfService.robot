@@ -14,6 +14,7 @@ ${EthernetDescription}  SEPARATOR=\n
 ...  ${SPACE*4}sysbus new Bus.BusMultiRegistration { address: 0x40029000; size: 0x200; region: "dma" }
 ...  }
 ...  ${SPACE*4}systemClockFrequency: 433333333
+...  ${SPACE*4}dmaBusWidth: BusWidth.Bits32
 ...  ${SPACE*4}IRQ -> gic@22
 ...
 ...  phy0: Network.EthernetPhysicalLayer @ ethernet 0
@@ -38,7 +39,7 @@ Create Machine
 
     Execute Command           set bin @${URL}/zynq--synopsys-dwc-qos-ethernet-vmlinux-s_14385668-e7b88e1decdd7da50b5717f4117ec5ccc9be812f
     Execute Command           set dtb @${URL}/zynq--synopsys-dwc-qos-ethernet-7000.dtb-s_12704-94873f422dba94e96f5e91862e660d508ade8ec1
-    Execute Command           set rootfs @${URL}/zynq--synopsys-dwc-qos-ethernet-rootfs.ext2-s_16777216-a3fc996595a2a2ef2b418c57dc6810409d82f1fd
+    Execute Command           set rootfs @${URL}/zynq--cadence-xspi-rootfs.ext2-s_16777216-65f5f502eb4a970cb0e24b5382a524a99ed9e360
 
     Execute Command           sysbus Redirect 0xC0000000 0x0 0x10000000
 
@@ -47,9 +48,9 @@ Create Machine
     Execute Command           ttc1 Frequency 33333333
 
 # Set registers
-    Execute Command           cpu SetRegisterUnsafe 0 0x000
-    Execute Command           cpu SetRegisterUnsafe 1 0xD32 # processor variant (cortex-a9)
-    Execute Command           cpu SetRegisterUnsafe 2 0x100 # device tree address
+    Execute Command           cpu SetRegister 0 0x000
+    Execute Command           cpu SetRegister 1 0xD32 # processor variant (cortex-a9)
+    Execute Command           cpu SetRegister 2 0x100 # device tree address
 
     Execute Command           sysbus LoadELF $bin
     Execute Command           sysbus LoadFdt $dtb 0x100 "console=ttyPS0,115200 ramdisk_size=65536 root=/dev/ram0 rw initrd=0x1a000000,64M" false

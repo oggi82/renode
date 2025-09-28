@@ -7,9 +7,11 @@
 //
 using System;
 using System.Threading;
-using AntShell.Terminal;
-using Antmicro.Renode.UI;
+
 using Antmicro.Renode.Utilities;
+
+using AntShell.Terminal;
+
 using Xwt;
 
 namespace Antmicro.Renode.UI
@@ -62,6 +64,7 @@ namespace Antmicro.Renode.UI
                 if(w != null)
                 {
                     w.Hide();
+                    w.Dispose();
                 }
             });
             w = null;
@@ -74,12 +77,12 @@ namespace Antmicro.Renode.UI
 
         public event Action OnClose;
 
-        private TerminalWidget terminalWidget;
-
         private void InnerOnClose()
         {
             OnClose?.Invoke();
         }
+
+        private TerminalWidget terminalWidget;
 
         private Xwt.Window window;
     }

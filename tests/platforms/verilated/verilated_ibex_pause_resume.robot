@@ -1,8 +1,9 @@
 *** Variables ***
+${URI}                          @https://dl.antmicro.com/projects/renode
 ${UART}                         sysbus.uart
-${CPU_IBEX_NATIVE_LINUX}        @https://dl.antmicro.com/projects/renode/verilated-ibex--libVtop-s_2214528-ebb048cb40ded91b7ddce15a4a9c303f18f36998
-${CPU_IBEX_NATIVE_WINDOWS}      @https://dl.antmicro.com/projects/renode/verilated-ibex--libVtop.dll-s_3253532-6f580a2d9bf4f525d5e5e6432d0cb1ff4efa9c75
-${CPU_IBEX_NATIVE_MACOS}        @https://dl.antmicro.com/projects/renode/verilated-ibex--libVtop.dylib-s_329984-1446a5b2d8a92b894bf1b78d16c30cd443c28527
+${CPU_IBEX_NATIVE_LINUX}        ${URI}/libVcpu_ibex-Linux-x86_64-13112907851.so-s_2251128-ab2dcb1801188d7f934bdeafa93f9c1edc60ad39
+${CPU_IBEX_NATIVE_WINDOWS}      ${URI}/libVcpu_ibex-Windows-x86_64-13112907851.dll-s_3426669-58d11ffc81ea755c1d1151e6b33fc13164bb13d5
+${CPU_IBEX_NATIVE_MACOS}        ${URI}/libVcpu_ibex-macOS-x86_64-13112907851.dylib-s_336528-7677f09f18bfb2937ad2bffdd63ed7d76bb15d56
 
 *** Keywords ***
 Create Machine
@@ -26,7 +27,7 @@ Get Virtual Time
     ${mc}=  Convert To Integer      ${match[0][1]}
     ${se}=  Convert To Integer      ${match[0][0]}
     ${t}=   Evaluate                ${mc} + ${se} * 1000000
-    [return]  ${t}
+    RETURN  ${t}
 
 Sleep And Measure
     ${t1}=  Get Virtual Time
@@ -37,6 +38,7 @@ Sleep And Measure
 
 *** Test Cases ***
 Should Pause And Resume
+    [Tags]                          skip_host_arm
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!  pauseEmulation=true
@@ -45,6 +47,7 @@ Should Pause And Resume
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Pause And Resume Cpu
+    [Tags]                          skip_host_arm
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!
@@ -54,19 +57,22 @@ Should Pause And Resume Cpu
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Enter Single Step Blocking
+    [Tags]                          skip_host_arm
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!
-    Execute Command             cpu ExecutionMode SingleStepBlocking
+    Execute Command             cpu ExecutionMode SingleStep
     Sleep And Measure
     Execute Command             cpu ExecutionMode Continuous
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Enter Single Step Non Blocking
+    [Tags]                          skip_host_arm
     Create Machine
+    Execute Command             emulation SingleStepBlocking false
 
     Wait For Line On Uart       Build your hardware, easily!
-    Execute Command             cpu ExecutionMode SingleStepNonBlocking
+    Execute Command             cpu ExecutionMode SingleStep
     ${t1}=  Get Virtual Time
     Test If Uart Is Idle        4
     ${t2}=  Get Virtual Time
@@ -75,6 +81,7 @@ Should Enter Single Step Non Blocking
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Reset
+    [Tags]                          skip_host_arm
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!

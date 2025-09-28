@@ -1,19 +1,20 @@
 //
-// Copyright (c) 2010-2023 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
+
 using Antmicro.Renode.Core;
+using Antmicro.Renode.Exceptions;
+using Antmicro.Renode.Logging;
 using Antmicro.Renode.UserInterface;
 using Antmicro.Renode.Utilities;
-using Antmicro.Renode.Logging;
-using Antmicro.Renode.Exceptions;
-using System.Runtime.ExceptionServices;
 
 namespace Antmicro.Renode.RobotFramework
 {
@@ -41,6 +42,11 @@ namespace Antmicro.Renode.RobotFramework
         {
             EmulationManager.Instance.Clear();
             Recorder.Instance.ClearEvents();
+            if(logTester != null)
+            {
+                Logger.RemoveBackend(logTester);
+                logTester = null;
+            }
         }
 
         [RobotFrameworkKeyword(replayMode: Replay.Always)]
@@ -128,36 +134,36 @@ namespace Antmicro.Renode.RobotFramework
             var isStarted = EmulationManager.Instance.CurrentEmulation.IsStarted;
             switch(action)
             {
-                case HotSpotAction.None:
-                    // do nothing
-                    break;
-                case HotSpotAction.Pause:
-                    if(isStarted)
-                    {
-                        EmulationManager.Instance.CurrentEmulation.PauseAll();
-                        EmulationManager.Instance.CurrentEmulation.StartAll();
-                    }
-                    break;
-                case HotSpotAction.Serialize:
-                    var fileName = TemporaryFilesManager.Instance.GetTemporaryFile();
-                    var monitor = ObjectCreator.Instance.GetSurrogate<Monitor>();
-                    if(monitor.Machine != null)
-                    {
-                        EmulationManager.Instance.CurrentEmulation.AddOrUpdateInBag("monitor_machine", monitor.Machine);
-                    }
-                    EmulationManager.Instance.Save(fileName);
-                    EmulationManager.Instance.Load(fileName);
-                    if(EmulationManager.Instance.CurrentEmulation.TryGetFromBag<Machine>("monitor_machine", out var mac))
-                    {
-                        monitor.Machine = mac;
-                    }
-                    if(isStarted)
-                    {
-                        EmulationManager.Instance.CurrentEmulation.StartAll();
-                    }
-                    break;
-                default:
-                    throw new KeywordException("Hot spot action {0} is not currently supported", action);
+            case HotSpotAction.None:
+                // do nothing
+                break;
+            case HotSpotAction.Pause:
+                if(isStarted)
+                {
+                    EmulationManager.Instance.CurrentEmulation.PauseAll();
+                    EmulationManager.Instance.CurrentEmulation.StartAll();
+                }
+                break;
+            case HotSpotAction.Serialize:
+                var fileName = TemporaryFilesManager.Instance.GetTemporaryFile();
+                var monitor = ObjectCreator.Instance.GetSurrogate<Monitor>();
+                if(monitor.Machine != null)
+                {
+                    EmulationManager.Instance.CurrentEmulation.AddOrUpdateInBag("monitor_machine", monitor.Machine);
+                }
+                EmulationManager.Instance.Save(fileName);
+                EmulationManager.Instance.Load(fileName);
+                if(EmulationManager.Instance.CurrentEmulation.TryGetFromBag<Machine>("monitor_machine", out var mac))
+                {
+                    monitor.Machine = mac;
+                }
+                if(isStarted)
+                {
+                    EmulationManager.Instance.CurrentEmulation.StartAll();
+                }
+                break;
+            default:
+                throw new KeywordException("Hot spot action {0} is not currently supported", action);
             }
         }
 
@@ -191,7 +197,7 @@ namespace Antmicro.Renode.RobotFramework
             if(isSerialized)
             {
                 EmulationManager.Instance.Load(savepoint.Filename);
-                if(savepoint.SelectedMachine!= null)
+                if(savepoint.SelectedMachine != null)
                 {
                     ExecuteCommand($"mach set \"{savepoint.SelectedMachine}\"");
                 }
@@ -224,7 +230,7 @@ namespace Antmicro.Renode.RobotFramework
             try
             {
                 masterTimeSource.BlockHook += callback;
-                System.Threading.WaitHandle.WaitAny(new [] { timeoutEvent.WaitHandle, mre });
+                System.Threading.WaitHandle.WaitAny(new[] { timeoutEvent.WaitHandle, mre });
 
                 if(timeoutEvent.IsTriggered)
                 {
@@ -235,6 +241,50 @@ namespace Antmicro.Renode.RobotFramework
             {
                 masterTimeSource.BlockHook -= callback;
             }
+        }
+
+        [RobotFrameworkKeyword]
+        public void WaitForGdbConnection(int port, string machine = null, bool pauseToWait = true, bool acceptRunningServer = true)
+        {
+            IMachine machineObject;
+            if(machine == null)
+            {
+                machineObject = TestersProvider<object, IEmulationElement>.TryGetDefaultMachineOrThrowKeywordException();
+            }
+            else if(!EmulationManager.Instance.CurrentEmulation.TryGetMachineByName(machine, out machineObject))
+            {
+                throw new KeywordException("Machine with name {0} not found. Available machines: [{1}]", machine,
+                        string.Join(", ", EmulationManager.Instance.CurrentEmulation.Names));
+            }
+
+            if(pauseToWait)
+            {
+                machineObject.PauseAndRequestEmulationPause();
+            }
+
+            if(machineObject.IsGdbConnectedToServer(port) && acceptRunningServer)
+            {
+                // A server is already running, so no need to wait
+                return;
+            }
+
+            // Since this keyword is likely to be used to manually inspect running application or in issue reproduction cases
+            // make sure that the user is informed about the need to connect
+            machineObject.Log(LogLevel.Warning, "Awaiting GDB connection on port {0}", port);
+
+            var connectedEvent = new System.Threading.ManualResetEvent(false);
+            Action<Stream> listener = delegate
+            {
+                connectedEvent.Set();
+            };
+
+            if(!machineObject.AttachConnectionAcceptedListenerToGdbStub(port, listener))
+            {
+                throw new KeywordException($"No GDB server running on port {port}. Cannot await GDB connection");
+            }
+            connectedEvent.WaitOne();
+            // If we fail here, we can't do anything - the stub might have disconnected
+            machineObject.DetachConnectionAcceptedListenerFromGdbStub(port, listener);
         }
 
         [RobotFrameworkKeyword(replayMode: Replay.Always)]
@@ -260,40 +310,73 @@ namespace Antmicro.Renode.RobotFramework
             return result;
         }
 
-        [RobotFrameworkKeyword(replayMode: Replay.Always)]
-        public void CreateLogTester(float timeout)
+        [RobotFrameworkKeyword]
+        public void RegisterFailingLogString(string pattern, bool treatAsRegex = false)
         {
+            CheckLogTester();
+
+            logTester.RegisterFailingString(pattern, treatAsRegex);
+        }
+
+        [RobotFrameworkKeyword]
+        public void UnregisterFailingLogString(string pattern, bool treatAsRegex = false)
+        {
+            CheckLogTester();
+
+            logTester.UnregisterFailingString(pattern, treatAsRegex);
+        }
+
+        [RobotFrameworkKeyword(replayMode: Replay.Always)]
+        public void CreateLogTester(float timeout, bool? defaultPauseEmulation = null)
+        {
+            this.defaultPauseEmulation = defaultPauseEmulation.GetValueOrDefault();
             logTester = new LogTester(timeout);
             Logging.Logger.AddBackend(logTester, "Log Tester", true);
         }
 
         [RobotFrameworkKeyword]
         public string WaitForLogEntry(string pattern, float? timeout = null, bool keep = false, bool treatAsRegex = false,
-            bool pauseEmulation = false, LogLevel level = null)
+            bool? pauseEmulation = null, LogLevel level = null)
         {
             CheckLogTester();
 
-            var result = logTester.WaitForEntry(pattern, out var bufferedMessages, timeout, keep, treatAsRegex, pauseEmulation, level);
+            var result = logTester.WaitForEntry(pattern, out var bufferedMessages, out var isFailingString, timeout, keep, treatAsRegex, pauseEmulation ?? defaultPauseEmulation, level);
             if(result == null)
             {
-                var logMessages = string.Join("\n ", bufferedMessages);
-                throw new KeywordException($"Expected pattern \"{pattern}\" did not appear in the log\nBuffered log messages are: \n {logMessages}");
+                // We must limit the length of the resulting string to Int32.MaxValue to avoid OutOfMemoryException.
+                // We could do it accurately, but it doesn't seem worth here, because the goal is just to provide some extra context to the exception message.
+                // We arbitrarily chose the number of messages to include here. In theory it could still throw during string.Join operation given very long messages,
+                // but it's unlikely to happen given the value of Int32.MaxValue = 2,147,483,647.
+                var logContextMessages = bufferedMessages.TakeLast(MaxLogContextPrintedOnException);
+                var logMessages = string.Join("\n ", logContextMessages);
+                throw new KeywordException($"Expected pattern \"{pattern}\" did not appear in the log\nLast {logContextMessages.Count()} buffered log messages are: \n {logMessages}");
+            }
+            if(isFailingString)
+            {
+                throw new InvalidOperationException($"Log tester failed!\n\nTest failing entry has been found in log:\n{result}");
             }
             return result;
         }
 
         [RobotFrameworkKeyword]
-        public void ShouldNotBeInLog(String pattern, float? timeout = null, bool treatAsRegex = false, LogLevel level = null)
+        public void ShouldNotBeInLog(String pattern, float? timeout = null, bool treatAsRegex = false, bool? pauseEmulation = null, LogLevel level = null)
         {
             CheckLogTester();
 
             // Passing `level` as a named argument causes a compiler crash in Mono 6.8.0.105+dfsg-3.4
             // from Debian
-            var result = logTester.WaitForEntry(pattern, out var _, timeout, true, treatAsRegex, false, level);
+            var result = logTester.WaitForEntry(pattern, out var _, out var __, timeout, true, treatAsRegex, pauseEmulation ?? defaultPauseEmulation, level);
             if(result != null)
             {
                 throw new KeywordException($"Unexpected line detected in the log: {result}");
             }
+        }
+
+        [RobotFrameworkKeyword]
+        public void ClearLogTesterHistory()
+        {
+            CheckLogTester();
+            logTester.ClearHistory();
         }
 
         [RobotFrameworkKeyword(replayMode: Replay.Never)]
@@ -370,14 +453,22 @@ namespace Antmicro.Renode.RobotFramework
             }
         }
 
-        private readonly Dictionary<string, Savepoint> savepoints;
-
         private LogTester logTester;
         private string cachedLogFilePath;
+        private bool defaultPauseEmulation;
+
+        private readonly Dictionary<string, Savepoint> savepoints;
 
         private readonly Monitor monitor;
 
         private const string CachedLogBackendName = "cache";
+        private const int MaxLogContextPrintedOnException = 1000;
+
+        public enum ProviderType
+        {
+            Serialization = 0,
+            Reexecution = 1,
+        }
 
         private struct Savepoint
         {
@@ -388,14 +479,8 @@ namespace Antmicro.Renode.RobotFramework
             }
 
             public string SelectedMachine { get; }
-            public string Filename { get; }
-        }
 
-        public enum ProviderType
-        {
-            Serialization = 0,
-            Reexecution = 1,
+            public string Filename { get; }
         }
     }
 }
-

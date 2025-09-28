@@ -1,14 +1,13 @@
 *** Variables ***
-${URI}                                   @https://dl.antmicro.com/projects/renode/
-
+${URI}                                   @https://dl.antmicro.com/projects/renode
 ${PROMPT}                                zynq>
 ${SCRIPT}                                ${CURDIR}/../../../scripts/single-node/zynq_verilated_fastvdma.resc
 ${UART}                                  sysbus.uart1
 ${FASTVDMA_DRIVER}                       /lib/modules/5.10.0-xilinx/kernel/drivers/dma/fastvdma/fastvdma.ko
 ${FASTVDMA_DEMO_DRIVER}                  /lib/modules/5.10.0-xilinx/kernel/drivers/dma/fastvdma/fastvdma-demo.ko
-${FASTVDMA_NATIVE_LINUX}                 ${URI}zynq-fastvdma_libVfastvdma-Linux-x86_64-1246779523.so-s_2057616-93e755f7d67bc4d5ca33cce6c88bbe8ea8b3bd31
-${FASTVDMA_NATIVE_WINDOWS}               ${URI}zynq-fastvdma_libVfastvdma-Windows-x86_64-1246779523.dll-s_14839852-62f85c68c37d34f17b10d39c5861780856d1698e
-${FASTVDMA_NATIVE_MACOS}                 ${URI}libVfastvdma-macOS-x86_64-1246779523.dylib-s_230304-6c7a97c3b3adddf60bfb769e751403e85092c3b8
+${FASTVDMA_NATIVE_LINUX}                 ${URI}/libVfastvdma-Linux-x86_64-12904733885.so-s_2104432-8ec57bdee00c76a044024158525d4130af0afc1a
+${FASTVDMA_NATIVE_WINDOWS}               ${URI}/libVfastvdma-Windows-x86_64-12904733885.dll-s_3265828-0e1691527cfb633cf5d8865f3445529708e73f8f
+${FASTVDMA_NATIVE_MACOS}                 ${URI}/libVfastvdma-macOS-x86_64-12904733885.dylib-s_239144-ebd397eb4d74c08be26cec08c022e90b78f0e020
 
 *** Keywords ***
 Create Machine
@@ -37,6 +36,7 @@ Compare Parts Of Images
 *** Test Cases ***
 Should Boot Linux
     [Documentation]                      Boots Linux on the Zynq 7000-based Zedboard platform in co-simulation with FastVDMA.
+    [Tags]                          skip_host_arm
 
     Create Machine
     Start Emulation
@@ -47,10 +47,11 @@ Should Boot Linux
 
 Should Load Drivers
     [Documentation]                      Loads fastvdma.ko and fastvdma-demo.ko and performs image transfer via FastVDMA.
+    [Tags]                          skip_host_arm
     Requires                             booted-linux
 
-# Suppress messages from kernel space
-    Write Line To Uart                   echo 0 > /proc/sys/kernel/printk
+# Suppress messages from kernel space; don't wait for echo because a kernel log might be printed in the middle of writing.
+    Write Line To Uart                   echo 0 > /proc/sys/kernel/printk  waitForEcho=false
 
 # Write Line To Uart for some reason breaks this line into two.
     Write To Uart                        insmod ${FASTVDMA_DRIVER} ${\n}
@@ -75,6 +76,7 @@ Should Load Drivers
 
 Verify Image
     [Documentation]                      Verifies whether the image has been transferred correctly.
+    [Tags]                          skip_host_arm
     Requires                             output
 
 # The output image (out.rgba) should consist of img1.rgba (256x256px) in the middle of img0.rgba (512x512px)

@@ -7,45 +7,31 @@ set -u
 cd "${0%/*}"
 . common_make_packages.sh
 
-if ! is_dep_available zip
-then
-    exit 1
-fi
-
 DIR=renode_$VERSION
 ZIP=$DIR.zip
 MSI=$DIR.msi
 
 OS_NAME=windows
 SED_COMMAND="sed -i"
-. common_copy_files.sh
+. common_copy_files_package.sh
 
 PACKAGES=output/packages
 OUTPUT=$BASE/$PACKAGES
 
 ### prepare renode-test
-cat >> $DIR/tests/test.bat << EOL
-@echo off
-set SCRIPTDIR=%~dp0
-py -3 "%SCRIPTDIR%\run_tests.py" --css-file "%SCRIPTDIR%\robot.css" --exclude "skip_windows" --robot-framework-remote-server-full-directory  "%SCRIPTDIR%\..\bin" -r %cd% %*
-EOL
-
-cat >> $DIR/bin/renode-test.bat << EOL
-@echo off
-set test_script=%~dp0%..\tests\test.bat
-call "%test_script%" %*
-EOL
+cp -r $BASE/renode-test.bat $DIR/bin/renode-test.bat
+sed -i 's/CONTEXT=source/CONTEXT=package/' $DIR/bin/renode-test.bat
 
 mkdir -p $OUTPUT
 
 MSBuild.exe -t:Clean,Build windows/RenodeSetup/SetupProject.wixproj -p:version=${VERSION%\+*} -p:installer_name=$DIR
 
 ### create windows package
+# Absolute path to use the Windows builtin BSD tar instead of minGW tar
+/c/Windows/SysWOW64/tar.exe -a -c -f $ZIP $DIR
 if $REMOVE_WORKDIR
 then
-    zip -qrm $ZIP $DIR/
-else
-    zip -qr $ZIP $DIR/
+    rm -rf $DIR
 fi
 
 mv $ZIP $OUTPUT

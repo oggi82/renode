@@ -1,6 +1,7 @@
 MONOVERSION=`cat ../mono_version`
 MONO_MAJOR=`echo $MONOVERSION | cut -d'.' -f1`
 MONO_MINOR=`echo $MONOVERSION | cut -d'.' -f2`
+DOTNET_VERSION="8.0"
 TARGET="Release"
 BASE=../..
 REMOVE_WORKDIR=true
@@ -32,7 +33,7 @@ do
             ;;
         n)
             DATE="+`date +%Y%m%d`"
-            COMMIT="git`git rev-parse --short HEAD`"
+            COMMIT="git`git rev-parse --short=9 HEAD`"
             ;;
         l)
             REMOVE_WORKDIR=false

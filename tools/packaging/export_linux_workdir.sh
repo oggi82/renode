@@ -18,7 +18,7 @@ cd "${0%/*}"
 
 OS_NAME=linux
 SED_COMMAND="sed -i"
-. common_copy_files.sh
+. common_copy_files_package.sh
 
 TEST_SCRIPT=$DIR/renode-test
 
@@ -36,7 +36,7 @@ echo "MONOVERSION=$MONOVERSION" >> $COMMAND_SCRIPT
 echo "REQUIRED_MAJOR=$MONO_MAJOR" >> $COMMAND_SCRIPT
 echo "REQUIRED_MINOR=$MONO_MINOR" >> $COMMAND_SCRIPT
 # skip the first line (with the hashbang)
-tail -n +2 linux/renode-template >> $COMMAND_SCRIPT
+tail -n +2 linux/renode-mono-template >> $COMMAND_SCRIPT
 $SED_COMMAND "s|/opt/renode|$DIR|" $COMMAND_SCRIPT
 chmod +x $COMMAND_SCRIPT
 

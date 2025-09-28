@@ -1,7 +1,7 @@
 e51: CPU.RiscV64 @ sysbus
     cpuType: "rv64imac_zicsr_zifencei"
     hartId: 0
-    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+    privilegedArchitecture: PrivilegedArchitecture.Priv1_10
     timeProvider: clint
     CyclesPerInstruction: 8
     init:
@@ -10,36 +10,40 @@ e51: CPU.RiscV64 @ sysbus
 u54_1: CPU.RiscV64 @ sysbus
     cpuType: "rv64gc_zicsr_zifencei"
     hartId: 1
-    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+    privilegedArchitecture: PrivilegedArchitecture.Priv1_10
     timeProvider: clint
     CyclesPerInstruction: 8
+    allowUnalignedAccesses: true
     init:
         RegisterCustomCSR "BPM" 0x7C0 Machine
 
 u54_2: CPU.RiscV64 @ sysbus
     cpuType: "rv64gc_zicsr_zifencei"
     hartId: 2
-    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+    privilegedArchitecture: PrivilegedArchitecture.Priv1_10
     timeProvider: clint
     CyclesPerInstruction: 8
+    allowUnalignedAccesses: true
     init:
         RegisterCustomCSR "BPM" 0x7C0 Machine
 
 u54_3: CPU.RiscV64 @ sysbus
     cpuType: "rv64gc_zicsr_zifencei"
     hartId: 3
-    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+    privilegedArchitecture: PrivilegedArchitecture.Priv1_10
     timeProvider: clint
     CyclesPerInstruction: 8
+    allowUnalignedAccesses: true
     init:
         RegisterCustomCSR "BPM" 0x7C0 Machine
 
 u54_4: CPU.RiscV64 @ sysbus
     cpuType: "rv64gc_zicsr_zifencei"
     hartId: 4
-    privilegeArchitecture: PrivilegeArchitecture.Priv1_10
+    privilegedArchitecture: PrivilegedArchitecture.Priv1_10
     timeProvider: clint
     CyclesPerInstruction: 8
+    allowUnalignedAccesses: true
     init:
         RegisterCustomCSR "BPM" 0x7C0 Machine
 
@@ -213,6 +217,10 @@ u54Hart3ITim: Memory.MappedMemory @ sysbus 0x01818000
 u54Hart4ITim: Memory.MappedMemory @ sysbus 0x01820000
     size: 0x7000
 
+// The exact DDR Memory Partition depends on the amount of physically connected DDR memory.
+// Both BeagleV-Fire and PolarFire SoC Icicle Kit based on this soc are equipped with 2GB,
+// so we put it here divided into ddr and ddr2 parts as a sane default.
+// Override size at a board level if different configuration is expected.
 ddr: Memory.MappedMemory @ {
         sysbus 0x80000000;
         sysbus <0xC0000000, +0x10000000>;
@@ -222,6 +230,16 @@ ddr: Memory.MappedMemory @ {
         sysbus 0x1800000000
     }
     size: 0x40000000
+
+ddr2: Memory.MappedMemory @ {
+        sysbus 0x1040000000;
+        sysbus 0x1440000000;
+        sysbus 0x1840000000
+    }
+    size: 0x40000000
+
+mem_bootloader: Memory.MappedMemory @ sysbus 0x0
+    size: 0x100000
 
 pcie0: PCI.MPFS_PCIe @ sysbus 0x53004000
 
@@ -240,22 +258,14 @@ pcieMem: PCI.PCIeMemory  @ pcie1 1
     size: 0x20000
     parent: pcie1
 
-qspi: SPI.MPFS_QSPI @ sysbus 0x21000000
-    IRQ -> plic@85
-
-pseFlash: SPI.Micron_MT25Q @ qspi
-    underlyingMemory: flash_mem
-
-flash_mem: Memory.MappedMemory
-    size: 0x00800000
-
-sysServices: Miscellaneous.MPFS_SystemServices @ sysbus 0x37020000
-    flashMemory: flash_mem
-    SerialNumberLower: 0x0123456789ABCDEF
-    SerialNumberUpper: 0x0123456789ABCDEF
-    IRQ -> plic@96
+mailbox: Memory.ArrayMemory @ sysbus 0x37020800
+    size: 0x800
 
 athena: Miscellaneous.Crypto.AthenaX5200 @ sysbus 0x22000000
+
+ioscb: Python.PythonPeripheral @ sysbus 0x37080000
+    size: 0x1f7ffff
+    script: '''request.Value = 0xFFFFFFFF'''
 
 // There are 8 BootRom registers covering range from 0x20003120 to 0x2000313F,
 // but because of Renode's memory alignment limitations they are mapped as a single memory
@@ -267,9 +277,34 @@ DDR_PHY: Miscellaneous.MPFS_DDRMock @ sysbus 0x20007000
 SCB_DDR_PLL: Miscellaneous.MPFS_DDRMock @ sysbus 0x3e010000
 DDRCFG: Miscellaneous.MPFS_DDRMock @ sysbus 0x20080000
 
+CacheConfig_WayEnable: Python.PythonPeripheral @ sysbus 0x02010008
+    size: 0x8
+    initable: true
+    script: '''
+if request.IsInit:
+    reg = 0x0
+elif request.IsRead:
+    request.Value = reg
+elif request.IsWrite:
+    reg = request.Value
+'''
+
+TopSystemRegisters: Miscellaneous.MPFS_Sysreg @ sysbus 0x20002000
+
 sysbus:
     init:
-        Tag <0x200020B8, 0x200020BB> "SYSREG:MESH_SEED_CR" 0xFF
+        // DDR Memory Address Space is tagged below.
+        // The exact DDR Memory Partition depends on the amount of physically connected DDR memory.
+        Tag <0x80000000 0x40000000> "DDR Cached 1GB"
+        Tag <0x1000000000 0x400000000> "DDR Cached 16GB"
+        Tag <0xC0000000 0x10000000> "DDR Non-Cached 256MB"
+        Tag <0xD0000000 0x10000000> "DDR Non-Cached WCB 256MB"
+        Tag <0x1400000000 0x400000000> "DDR Non-Cached 16GB"
+        Tag <0x1800000000 0x400000000> "DDR Non-Cached WCB 16GB"
+        SilenceRange <0x02010010, 0x02010FFF> # "Cache controller"
+        SilenceRange <0x01700000, 0x01704FFF> # Bus error units
+        Tag <0x37080000, 0x38FFFFFF> "IOSCB" 0xFFFFFFFF
+        Tag <0x20005000, 0x20005FFF> "MPU Config"
 
         Tag <0x20007000, 0x20007FFF> "CFG_DDR_SGMII_PHY"
         Tag <0x20007208, 0x2000720B> "IOC_REG1" 0xFF
@@ -284,6 +319,4 @@ sysbus:
         Tag <0x20084428, 0x2008442B> "CSR_APB_MT_DONE_ACK" 0x1
         Tag <0x20090034, 0x20090037> "CSR_APB_STAT_DFI_INIT_COMPLETE" 0x1
         Tag <0x20090038, 0x2009003B> "CSR_APB_STAT_DFI_TRAINING_COMPLETE" 0x1
-
-        Tag <0x3E001004, 0x3E001007> "PLL:PLL_CTRL" 0x2000000
         Tag <0x3E040008, 0x3E04000B> "IOSCB_IO_CALIB_DDR:IOC_REG1" 0xFF

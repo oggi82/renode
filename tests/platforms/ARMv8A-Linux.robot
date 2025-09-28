@@ -1,6 +1,7 @@
 *** Variables ***
 ${UART}                           sysbus.uart0
 ${URI}                            @https://dl.antmicro.com/projects/renode
+${LINUX_PROMPT}                   \#${SPACE}
 
 # DTBs are embedded in Coreboot+Linux ROMs. Built with Coreboot v4.20.1, ATF v2.9.0, Linux v6.3 and Buildroot 2023.08-rc1.
 ${COREBOOT_ARMv8A_ROM}                ${URI}/coreboot-without-payload-armv8a.rom-s_16777216-b5c6df85cfb8d240d31fe3cd1d055a3106d2fadb
@@ -38,6 +39,17 @@ Create Machine
 
     Create Terminal Tester        ${UART}  defaultPauseEmulation=true
     Execute Command               showAnalyzer ${UART}
+
+Create Multicore Machine
+    Execute Command                 include @scripts/single-node/cortex-a53-linux.resc
+    Create Terminal Tester          ${UART}
+
+Boot Linux And Login
+    # Verify that SMP works
+    Wait For Line On Uart           SMP: Total of 4 processors activated  includeUnfinishedLine=true
+    Wait For Prompt On Uart         buildroot login:  timeout=50
+    Write Line To Uart              root
+    Wait For Prompt On Uart         ${LINUX_PROMPT}
 
 Configure UART For Boot Logs
     [Arguments]    ${uart}
@@ -173,14 +185,15 @@ Shell Should Handle Basic Commands
     Wait For Line On Uart         dev
     Wait For Line On Uart         etc
     Wait For Line On Uart         init
-    Wait For Prompt On Uart       \#${SPACE}
 
-    # Test 1s sleep by checking if the prompt is printed between 0.85-1.05s afterwards.
-    # It can be faster than 1s as we're pausing emulation after 'sleep 1' gets echoed.
+    ${before}=                    Wait For Prompt On Uart       \#${SPACE}
+
     Write Line To Uart            sleep 1
-    Run Keyword And Expect Error  *Line containing >># << event: failure*
-    ...  Wait For Prompt On Uart  \#${SPACE}  timeout=0.85
-    Wait For Prompt On Uart       \#${SPACE}  timeout=0.2
+    ${after}=                     Wait For Prompt On Uart       \#${SPACE}
+    # Timestamps are in milliseconds
+    Should Be True                ${after.Timestamp} - ${before.Timestamp} > 1000
+    Should Be True                ${after.Timestamp} - ${before.Timestamp} < 1050
+
 
 Test Running Coreboot With Linux And ARM Trusted Firmware
     [Arguments]    ${cpu_model}    ${coreboot_rom}
@@ -226,6 +239,7 @@ Test Running Coreboot Without Payload
     Wait For Line On Uart         Payload not loaded.
 
 Test Running Coreboot With Linux And ARM Trusted Firmware On Cortex-A53 With GICv2
+    [Tags]                        basic-tests
     Create Machine                gic_version=2
     Execute Command               sysbus LoadBinary ${COREBOOT_ARMv8A_GICv2_ROM_LINUX} 0x0
     Configure UART For Boot Logs  ${UART}
@@ -282,6 +296,7 @@ Test Running Oreboot With Linux And Rust Shell With GICv2
     Linux Should Start Rust Userspace
 
 Test Running Oreboot With Linux And Rust Shell With GICv3
+    [Tags]                        basic-tests
     Create Machine                el2_el3_disabled=True  gic_security_disabled=True
 
     Execute Command               sysbus LoadBinary ${OREBOOT_GICv3_DTB} 0x40000000
@@ -308,6 +323,7 @@ Test Running Oreboot With Linux And Rust Shell With GICv3
     Linux Should Start Rust Userspace
 
 Test Running U-Boot With Linux
+    [Tags]                        basic-tests
     # U-Boot doesn't properly support GIC Security Extensions.
     Create Machine                gic_version=2  gic_security_disabled=True
 
@@ -339,3 +355,12 @@ Test Running U-Boot With Linux
 
     Wait For Services And Enter Shell   with_network=True
     Shell Should Handle Basic Commands
+
+Should Boot And Login
+    Create Multicore Machine
+
+    Boot Linux And Login
+
+    # Check if we see other CPUs
+    Write Line To Uart              nproc
+    Wait For Line On Uart           4

@@ -4,54 +4,50 @@ Create Machine
     Execute Command                             machine LoadPlatformDescriptionFromString "cpu: CPU.RiscV64 @ sysbus { cpuType: \\"rv64imacv_zicsr\\"; timeProvider: empty }"
     Execute Command                             machine LoadPlatformDescriptionFromString "mem: Memory.MappedMemory @ sysbus 0x0 { size: 0x1000 }"
 
-    Execute Command                             sysbus.cpu ExecutionMode SingleStepBlocking
     Execute Command                             sysbus.cpu PC 0x0
 
 *** Test Cases ***
 Should Count Custom 16-bit Instruction
     Create Machine
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001110" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             sysbus.cpu EnableCustomOpcodesCounting
 
-    Execute Command                             sysbus WriteWord 0x0 0xb38f
+    Execute Command                             sysbus WriteWord 0x0 0xb38e
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step
 
     PC Should Be Equal                          0x2
-    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "1011001110001111"
+    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "1011001110001110"
     Should Be Equal As Numbers                  ${c}  1
 
 Should Count Custom 32-bit Instruction
     Create Machine
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110000010" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110000011" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             sysbus.cpu EnableCustomOpcodesCounting
 
-    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f82
+    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f83
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step
 
     PC Should Be Equal                          0x4
-    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "10110011100011110000111110000010"
+    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "10110011100011110000111110000011"
     Should Be Equal As Numbers                  ${c}  1
 
 Should Count Custom 64-bit Instruction
     Create Machine
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111110000010" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111110111111" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             sysbus.cpu EnableCustomOpcodesCounting
 
-    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f82
+    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0fbf
     Execute Command                             sysbus WriteDoubleWord 0x4 0xb38f0f82
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step
 
     PC Should Be Equal                          0x8
-    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "1011001110001111000011111000001010110011100011110000111110000010"
+    ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "1011001110001111000011111000001010110011100011110000111110111111"
     Should Be Equal As Numbers                  ${c}  1
 
 Should Count Standard Opcode
@@ -64,7 +60,6 @@ Should Count Standard Opcode
     Execute Command                             sysbus WriteDoubleWord 0x4 0x13
     Execute Command                             sysbus WriteDoubleWord 0x8 0x13
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step 3
 
     PC Should Be Equal                          0xC
@@ -82,7 +77,6 @@ Should Count RVV Opcode
     # vlm.v
     Execute Command                             sysbus WriteDoubleWord 0x0 0x02b00007
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step
 
     PC Should Be Equal                          0x4
@@ -121,7 +115,6 @@ Should Count RISC-V Opcodes
     # j
     Execute Command                             sysbus WriteDoubleWord 0xC 0x0000006f            
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step 4
 
     ${c}=  Execute Command                      sysbus.cpu GetOpcodeCounter "jal"

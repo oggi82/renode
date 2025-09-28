@@ -46,7 +46,7 @@ Prepare Machine
     Create Log Tester           ${LOG_TIMEOUT}
     Execute Command             machine LoadPlatformDescriptionFromString ${REPL}
 
-    Execute Command             sysbus.cpu ExecutionMode SingleStepNonBlocking
+    Execute Command             emulation SingleStepBlocking false
     Execute Command             sysbus.cpu PC ${PC_START}
     Execute Command             sysbus LogPeripheralAccess sysbus.${MEM1_NAME}
     Execute Command             sysbus LogPeripheralAccess sysbus.${MEM2_NAME}
@@ -55,7 +55,7 @@ Prepare Machine
 Trigger Page Access
     [Arguments]                 ${MEM}
     # Set R1 to MEM, then load the value at MEM into R0
-    Execute Command             sysbus.cpu SetRegisterUnsafe 1 ${MEM}
+    Execute Command             sysbus.cpu SetRegister 1 ${MEM}
     Write Thumb Opcode To       ${PC_START}     0x6808    # ldr r0, [r1, #0]
 
     Execute Command             sysbus.cpu PC ${PC_START}
@@ -76,7 +76,6 @@ Should Not Access Page Via Io
 Should Set And Clear Page Access Modes Correctly
     Prepare Machine
 
-    Start Emulation
     Wait For Log Entry              cpu: Patching PC ${PC_START} for Thumb mode.
 
     Should Not Access Page Via Io   ${MEM1_NAME}    ${MEM1_ADDR}

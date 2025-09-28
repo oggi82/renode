@@ -27,21 +27,26 @@ Use Peripheral
 
 *** Test Cases ***
 Should Compile Simple Peripheral
-        # Escape space in windows path
-        ${TEST_DIR}=             Evaluate  r"${CURDIR}".replace(" ", "\\ ")
-        Execute Command          include @${TEST_DIR}${/}SimplePeripheral.cs
+        Execute Command          include "${CURDIR}/SimplePeripheral.cs"
 
         Execute Command          mach create
         Execute Command          machine LoadPlatformDescriptionFromString ${SIMPLE_PLATFORM}
 
         Use Peripheral
 
+# We load dynamically compiled assemblies right away after the compilation,
+# so type dependencies can be resolved automatically between separate assemblies.
+# In the past we had a call to 'EnsureTypeIsLoaded "Antmicro.Renode.Peripherals.ReferencedType"'.
+# 'EnsureTypeIsLoaded' is no longer necessary when files are referencing each other,
+# but can still be called explicitly if needed (e.g. there is no reference to the type in any of the loaded libraries).
+# To test both cases (with and without 'EnsureTypeIsLoaded') we would need to have a separate robot file
+# and to run this test in a different process to make it isolated, because in .NET Framework
+# there is no way to unload an individual assembly without unloading all of the application domains that contain it.
+# See: https://github.com/dotnet/docs/blob/376d4347ab1d83256c81d2427051e6ff705bcd30/docs/standard/assembly/load-unload.md
+# It isn't worth the effort, so legacy command was just removed.
 Should Compile Multiple Files Referencing Each Other
-        # Escape space in windows path
-        ${TEST_DIR}=             Evaluate  r"${CURDIR}".replace(" ", "\\ ")
-        Execute Command          include @${TEST_DIR}${/}ReferencedType.cs
-        Execute Command          EnsureTypeIsLoaded "Antmicro.Renode.Peripherals.ReferencedType"
-        Execute Command          include @${TEST_DIR}${/}ReferencingPeripheral.cs
+        Execute Command          include "${CURDIR}/ReferencedType.cs"
+        Execute Command          include "${CURDIR}/ReferencingPeripheral.cs"
 
         Execute Command          mach create
         Execute Command          machine LoadPlatformDescriptionFromString ${COMPLEX_PLATFORM}

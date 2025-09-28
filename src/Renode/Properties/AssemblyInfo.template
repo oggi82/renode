@@ -1,5 +1,8 @@
 ﻿using System.Reflection;
+#pragma warning disable IDE0005
 using System.Runtime.CompilerServices;
+using System.Runtime.Versioning;
+#pragma warning restore IDE0005
 
 // Information about this assembly is defined by the following attributes.
 // Change them to the values specific to your project.
@@ -14,6 +17,12 @@ using System.Runtime.CompilerServices;
 [assembly: AssemblyProduct("Renode")]
 [assembly: AssemblyCopyright("(c) Antmicro")]
 [assembly: AssemblyCulture("")]
+[assembly: AssemblyMetadata("BinaryName", "renode")]
+
+#if (PLATFORM_WINDOWS && NET5_0_OR_GREATER)
+[assembly: TargetPlatform("windows10.0.17763.0")]
+[assembly: SupportedOSPlatform("windows10.0.17763.0")]
+#endif
 
 // The assembly version has the format "{Major}.{Minor}.{Build}.{Revision}".
 // The form "{Major}.{Minor}.*" will automatically update the build and revision,
@@ -27,4 +36,3 @@ using System.Runtime.CompilerServices;
 
 //[assembly: AssemblyDelaySign(false)]
 //[assembly: AssemblyKeyFile("")]
-

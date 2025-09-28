@@ -1,21 +1,24 @@
 *** Variables ***
-${URI}                              @https://dl.antmicro.com/projects/renode
-${FASTVDMA_SOCKET_LINUX}            ${URI}/Vfastvdma-Linux-x86_64-1116123840-s_1616232-37fd8031dec810475ac6abf68a789261ce6551b0
-${FASTVDMA_SOCKET_WINDOWS}          ${URI}/Vfastvdma-Windows-x86_64-1116123840.exe-s_14833257-3a1fef7953686e58a00b09870c5a57e3ac91621d
-${FASTVDMA_SOCKET_MACOS}            ${URI}/Vfastvdma-macOS-x86_64-1116123840-s_230336-8f69fd45aea5806309e9253bcca8b7e32a1d5544
-${FASTVDMA_NATIVE_LINUX}            ${URI}/libVfastvdma-Linux-x86_64-1116123840.so-s_2057368-8e927ed058a025cf5c1d4d423336f830e9dc7734
-${FASTVDMA_NATIVE_WINDOWS}          ${URI}/libVfastvdma-Windows-x86_64-1116123840.dll-s_14838113-a51512dd0c7c4b5f5d8e28aca2ce872a2c9c1edd
-${FASTVDMA_NATIVE_MACOS}            ${URI}/libVfastvdma-macOS-x86_64-1116123840.dylib-s_230272-465727b67a3b37554b2a0e6fd36f9b73e5af015e
-${RAM_SOCKET_LINUX}                 ${URI}/Vram-Linux-x86_64-1116123840-s_1599888-76d5965bf7e7e1c6b92a606c35cc9df818ac8f6f
-${RAM_SOCKET_WINDOWS}               ${URI}/Vram-Windows-x86_64-1116123840.exe-s_14819329-08c574a442749bff9e30de9e30323a0b730c64d2
-${RAM_SOCKET_MACOS}                 ${URI}/Vram-macOS-x86_64-1116123840-s_213960-84c4147cb55aa7a77a33db111cf34bd2e684e370
-${RAM_NATIVE_LINUX}                 ${URI}/libVram-Linux-x86_64-1116123840.so-s_2041000-dc075efcd97e2dc460660e26bcf34efe79f7da64
-${RAM_NATIVE_WINDOWS}               ${URI}/libVram-Windows-x86_64-1116123840.dll-s_14824186-efcb553f2f0a1d6aef13abedddec91d3613169fc
-${RAM_NATIVE_MACOS}                 ${URI}/libVram-macOS-x86_64-1116123840.dylib-s_213904-bab67e73e73c7f3f9f3b8916d6df53294d9e337a
+${URI}                             @https://dl.antmicro.com/projects/renode
+${FASTVDMA_SOCKET_LINUX}           ${URI}/Vfastvdma-Linux-x86_64-12904733885-s_1651016-da5e31f75673a48f4d6fbaa5b5f21fd9190df393
+${FASTVDMA_SOCKET_WINDOWS}         ${URI}/Vfastvdma-Windows-x86_64-12904733885.exe-s_3259432-da445f10460a1d6f48d470a5c631e6339a589190
+${FASTVDMA_SOCKET_MACOS}           ${URI}/Vfastvdma-macOS-x86_64-12904733885-s_239216-3c4f0c697d39916c5fc14ee560385336b4fcc062
+${FASTVDMA_NATIVE_LINUX}           ${URI}/libVfastvdma-Linux-x86_64-12904733885.so-s_2104432-8ec57bdee00c76a044024158525d4130af0afc1a
+${FASTVDMA_NATIVE_WINDOWS}         ${URI}/libVfastvdma-Windows-x86_64-12904733885.dll-s_3265828-0e1691527cfb633cf5d8865f3445529708e73f8f
+${FASTVDMA_NATIVE_MACOS}           ${URI}/libVfastvdma-macOS-x86_64-12904733885.dylib-s_239144-ebd397eb4d74c08be26cec08c022e90b78f0e020
+${RAM_SOCKET_LINUX}                ${URI}/Vram-Linux-x86_64-12904733885-s_1634672-820a0d6d950a74702808d07ad15a7f8a48f86fe0
+${RAM_SOCKET_WINDOWS}              ${URI}/Vram-Windows-x86_64-12904733885.exe-s_3245365-7151d2803f710e3f411483352aa822f63a3f405a
+${RAM_SOCKET_MACOS}                ${URI}/Vram-macOS-x86_64-12904733885-s_222840-ef7dd5bc27d5e7b13d0444491f2f1f0fb252052e
+${RAM_NATIVE_LINUX}                ${URI}/libVram-Linux-x86_64-12904733885.so-s_2088056-004e8ca045d4505d42f552b12f0408c9eb951e8a
+${RAM_NATIVE_WINDOWS}              ${URI}/libVram-Windows-x86_64-12904733885.dll-s_3252274-06f5f9b70593f9d57546c9be97791d70c9762129
+${RAM_NATIVE_MACOS}                ${URI}/libVram-macOS-x86_64-12904733885.dylib-s_222776-56574ab2821c56a41486c0233d494d7e841c57df
+
+${MAIN_LISTEN_PORT}         3335
+${ASYNC_LISTEN_PORT}        3336
 
 *** Keywords ***
 Create Machine
-    [Arguments]         ${use_socket}
+    [Arguments]         ${use_socket}   ${custom_ports}=False
     IF      ${use_socket}
         Set Test Variable   ${dma_args}             ; address: "127.0.0.1"
         Set Test Variable   ${fastvdma_linux}       ${FASTVDMA_SOCKET_LINUX}
@@ -39,8 +42,12 @@ Create Machine
     Execute Command                             using sysbus
     Execute Command                             mach create
     Execute Command                             machine LoadPlatformDescriptionFromString 'cpu: CPU.RiscV32 @ sysbus { cpuType: "rv32imaf"; timeProvider: empty }'
-    Execute Command                             machine LoadPlatformDescriptionFromString 'dma: Verilated.BaseDoubleWordVerilatedPeripheral @ sysbus <0x10000000, +0x100> { frequency: 100000; limitBuffer: 10000; timeout: 240000 ${dma_args} }'
-    Execute Command                             machine LoadPlatformDescriptionFromString 'mem: Verilated.BaseDoubleWordVerilatedPeripheral @ sysbus <0x20000000, +0x100000> { frequency: 100000; limitBuffer: 10000; timeout: 240000 ${mem_args} }'
+    IF      ${custom_ports}
+        Execute Command                         machine LoadPlatformDescriptionFromString 'dma: CoSimulated.CoSimulatedPeripheral @ sysbus <0x10000000, +0x100> { frequency: 100000; limitBuffer: 10000; timeout: 240000 ${dma_args}; mainListenPort: ${MAIN_LISTEN_PORT}; asyncListenPort: ${ASYNC_LISTEN_PORT} }'
+    ELSE
+        Execute Command                         machine LoadPlatformDescriptionFromString 'dma: CoSimulated.CoSimulatedPeripheral @ sysbus <0x10000000, +0x100> { frequency: 100000; limitBuffer: 10000; timeout: 240000 ${dma_args} }'
+    END
+    Execute Command                             machine LoadPlatformDescriptionFromString 'mem: CoSimulated.CoSimulatedPeripheral @ sysbus <0x20000000, +0x100000> { frequency: 100000; limitBuffer: 10000; timeout: 240000 ${mem_args} }'
     Execute Command                             machine LoadPlatformDescriptionFromString 'ram: Memory.MappedMemory @ sysbus 0xA0000000 { size: 0x06400000 }'
     Execute Command                             sysbus WriteDoubleWord 0xA2000000 0x10500073   # wfi
     Execute Command                             cpu PC 0xA2000000
@@ -121,7 +128,7 @@ Memory Should Contain
     ${res}=             Execute Command         ${periph} ReadDoubleWord ${addr}
     Should Contain                              ${res}             ${val}
 
-Test Read Write Verilated Memory
+Test Read Write Co-simulated Memory
     Ensure Memory Is Clear                      mem
 
     # Write to memory
@@ -141,7 +148,7 @@ Test DMA Transaction From Mapped Memory to Mapped Memory
 
     Ensure Memory Is Written                    ram
 
-Test DMA Transaction From Mapped Memory to Verilated Memory
+Test DMA Transaction From Mapped Memory to Co-simulated Memory
     Prepare Data                                0xA1000000
 
     Configure DMA                               0xA1000000  0x20000000
@@ -153,7 +160,7 @@ Test DMA Transaction From Mapped Memory to Verilated Memory
 
     Ensure Memory Is Written                    mem
 
-Test DMA Transaction From Verilated Memory to Mapped Memory
+Test DMA Transaction From Co-simulated Memory to Mapped Memory
     Prepare Data                                0x20080000
 
     Configure DMA                               0x20080000  0xA0000000
@@ -165,7 +172,7 @@ Test DMA Transaction From Verilated Memory to Mapped Memory
 
     Ensure Memory Is Written                    ram
 
-Test DMA Transaction From Verilated Memory to Verilated Memory
+Test DMA Transaction From Co-simulated Memory to Co-simulated Memory
     Prepare Data                                0x20080000
 
     Configure DMA                               0x20080000  0x20000000
@@ -178,47 +185,57 @@ Test DMA Transaction From Verilated Memory to Verilated Memory
     Ensure Memory Is Written                    mem
 
 *** Test Cases ***
-Should Read Write Verilated Memory Using Socket
+Should Read Write Co-simulated Memory Using Socket
+    [Tags]                          skip_host_arm
     Create Machine      True
-    Test Read Write Verilated Memory
+    Test Read Write Co-simulated Memory
+
+Should Read Write Co-simulated Memory Using Socket With Custom Ports
+    [Tags]                          skip_host_arm
+    Create Machine      True    True
+    Test Read Write Co-simulated Memory
 
 Should Run DMA Transaction From Mapped Memory to Mapped Memory Using Socket
+    [Tags]                          skip_host_arm
     Create Machine      True
     Test DMA Transaction From Mapped Memory to Mapped Memory
 
-Should Run DMA Transaction From Mapped Memory to Verilated Memory Using Socket
+Should Run DMA Transaction From Mapped Memory to Co-simulated Memory Using Socket
+    [Tags]                          skip_host_arm
     Create Machine      True
-    Test DMA Transaction From Mapped Memory to Verilated Memory
+    Test DMA Transaction From Mapped Memory to Co-simulated Memory
 
-Should Run DMA Transaction From Verilated Memory to Mapped Memory Using Socket
+Should Run DMA Transaction From Co-simulated Memory to Mapped Memory Using Socket
+    [Tags]                          skip_host_arm
     Create Machine      True
-    Test DMA Transaction From Verilated Memory to Mapped Memory
+    Test DMA Transaction From Co-simulated Memory to Mapped Memory
 
-Should Run DMA Transaction From Verilated Memory to Verilated Memory Using Socket
+Should Run DMA Transaction From Co-simulated Memory to Co-simulated Memory Using Socket
+    [Tags]                          skip_host_arm
     Create Machine      True
-    Test DMA Transaction From Verilated Memory to Verilated Memory
+    Test DMA Transaction From Co-simulated Memory to Co-simulated Memory
 
-Should Read Write Verilated Memory
-    [Tags]                          skip_osx
+Should Read Write Co-simulated Memory
+    [Tags]                          skip_osx  skip_host_arm
     Create Machine      False
-    Test Read Write Verilated Memory
+    Test Read Write Co-simulated Memory
 
 Should Run DMA Transaction From Mapped Memory to Mapped Memory
-    [Tags]                          skip_osx
+    [Tags]                          skip_osx  skip_host_arm
     Create Machine      False
     Test DMA Transaction From Mapped Memory to Mapped Memory
 
-Should Run DMA Transaction From Mapped Memory to Verilated Memory
-    [Tags]                          skip_osx
+Should Run DMA Transaction From Mapped Memory to Co-simulated Memory
+    [Tags]                          skip_osx  skip_host_arm
     Create Machine      False
-    Test DMA Transaction From Mapped Memory to Verilated Memory
+    Test DMA Transaction From Mapped Memory to Co-simulated Memory
 
-Should Run DMA Transaction From Verilated Memory to Mapped Memory
-    [Tags]                          skip_osx
+Should Run DMA Transaction From Co-simulated Memory to Mapped Memory
+    [Tags]                          skip_osx  skip_host_arm
     Create Machine      False
-    Test DMA Transaction From Verilated Memory to Mapped Memory
+    Test DMA Transaction From Co-simulated Memory to Mapped Memory
 
-Should Run DMA Transaction From Verilated Memory to Verilated Memory
-    [Tags]                          skip_osx
+Should Run DMA Transaction From Co-simulated Memory to Co-simulated Memory
+    [Tags]                          skip_osx  skip_host_arm
     Create Machine      False
-    Test DMA Transaction From Verilated Memory to Verilated Memory
+    Test DMA Transaction From Co-simulated Memory to Co-simulated Memory

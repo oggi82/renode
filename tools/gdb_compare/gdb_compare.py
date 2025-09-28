@@ -11,7 +11,6 @@ import argparse
 import pexpect
 import psutil
 import re
-import telnetlib
 import difflib
 from time import time
 from os import path
@@ -21,7 +20,6 @@ RENODE_GDB_PORT = 2222
 RENODE_TELNET_PORT = 12348
 RE_HEX = re.compile(r"0x[0-9A-Fa-f]+")
 RE_VEC_REGNAME = re.compile(r"v\d+")
-RE_FLOAT_REGNAME = re.compile(r"f[tsa]\d+")
 RE_GDB_ERRORS = (
     re.compile(r"\bUndefined .*?\.", re.MULTILINE),
     re.compile(r"\bThe \"remote\" target does not support \".*?\"\.", re.MULTILINE),
@@ -74,12 +72,6 @@ parser.add_argument("--renode-gdb-port",
                     action="store",
                     default=RENODE_GDB_PORT,
                     help="Port on which Renode will comunicate with GDB server")
-parser.add_argument("-P", "--renode-telnet-port",
-                    type=int,
-                    dest="renode_telnet_port",
-                    action="store",
-                    default=RENODE_TELNET_PORT,
-                    help="Port on which Renode will comunicate with telnet")
 parser.add_argument("-b", "--binary",
                     dest="debug_binary",
                     action="store",
@@ -123,23 +115,16 @@ Stack = list[tuple[str, int]]
 
 class Renode:
     """A class for communicating with a remote instance of Renode."""
-    def __init__(self, binary: str, port: int):
-        """Spawns a new instance of Renode and connects to it through Telnet."""
-        print(f"* Starting Renode instance on telnet port {port}")
-        # making sure there is only one instance of Renode on this port
-        for p in psutil.process_iter():
-            process_name = p.name().casefold()
-            if "renode" in process_name and str(port) in process_name:
-                print("!!! Found another instance of Renode running on the same port. Killing it before proceeding")
-                p.kill()
+    def __init__(self, binary: str):
+        """Spawns a new instance of Renode."""
+        print(f"* Starting Renode instance")
         try:
-            self.proc = pexpect.spawn(f"{binary} --disable-xwt --plain --port {port}", timeout=20)
+            self.proc = pexpect.spawn(f"{binary} --disable-gui --console --plain", timeout=20)
             self.proc.stripcr = True
-            self.proc.expect("Monitor available in telnet mode on port")
+            self.proc.expect('(monitor)')
         except pexpect.exceptions.EOF as err:
-            print("!!! Renode failed to start telnet server! (is --renode-path correct? is --renode-telnet-port available?)")
+            print("!!! Renode failed to start! (is --renode-path correct?)")
             raise err
-        self.connection = telnetlib.Telnet("localhost", port)
         # Sometimes first command does not work, hence we send this dummy one to make sure we got functional connection right after initialization
         self.command("echo 'Connected to GDB comparator'")
 
@@ -155,8 +140,7 @@ class Renode:
             print(str(self.proc))
             raise RuntimeError
 
-        input = input + "\n"
-        self.connection.write(input.encode())
+        self.proc.sendline(input.encode())
         if expected_log != "":
             try:
                 self.proc.expect([expected_log.encode()])
@@ -169,10 +153,6 @@ class Renode:
                 print(SECTION_SEPARATOR)
                 print(f"{err=} ; {type(err)=}")
                 exit(1)
-
-    def get_output(self) -> bytes:
-        """Reads all output from the Telnet connection."""
-        return self.connection.read_all()
 
 
 class GDBInstance:
@@ -199,7 +179,7 @@ class GDBInstance:
 
     def progress_by(self, delta: int, type: str = "stepi") -> None:
         """Steps `delta` times."""
-        adjusted_timeout = max(120, int(delta) / 5)
+        adjusted_timeout = max(1200, int(delta) / 5)
         self.run_command(type + (f" {delta}" if int(delta) > 1 else ""), timeout=adjusted_timeout)
 
     def get_symbol_at(self, addr: str) -> str:
@@ -211,7 +191,7 @@ class GDBInstance:
         """Deletes all breakpoints."""
         self.run_command("clear", async_=False)
 
-    def run_command(self, command: str, timeout: float = 10, confirm: bool = False, dont_wait_for_output: bool = False, async_: bool = True) -> None:
+    def run_command(self, command: str, timeout: float = 100, confirm: bool = False, dont_wait_for_output: bool = False, async_: bool = True) -> None:
         """Send an arbitrary command to the underlying GDB instance."""
         if not self.process.isalive():
             print(f"!!! The {self.name} GDB process has died!")
@@ -289,7 +269,7 @@ class GDBInstance:
         else:
             raise TypeError
 
-    async def expect(self, timeout: float = 10) -> None:
+    async def expect(self, timeout: float = 100) -> None:
         """Await execution of the last command to finish and update `self.last_output`."""
         try:
             await self.task
@@ -327,8 +307,23 @@ class GDBComparator:
     CommandsBuilder = Callable[[list[str]], list[str]]  # cmd_builder_func type
     REGISTER_CASES: list[tuple[RegNameTester, CommandsBuilder]] = [
         (lambda reg: RE_VEC_REGNAME.fullmatch(reg) is not None, lambda regs: [f"p/x (char[])${reg}.b" for reg in regs]),
-        (lambda reg: RE_FLOAT_REGNAME.fullmatch(reg) is not None, lambda regs: [f"p/x (char[])${reg}" for reg in regs]),
-        (lambda _: True, lambda regs: ["printf \"" + ":  0x%x\\n".join(regs) + ":  0x%x\\n\",$" + ",$".join(regs)]),
+        # From `info gdb Arrays` (GDB docs, 10.4 Artificial Arrays):
+        #   > Another way to create an artificial array is to use a cast.  This
+        #   > re-interprets a value as if it were an array.  The value need not be in
+        #   > memory:
+        #   >      (gdb) p/x (short[2])0x12345678
+        #   >      $1 = {0x1234, 0x5678}
+        #   >
+        #   > As a convenience, if you leave the array length out (as in
+        #   > '(TYPE[])VALUE') GDB calculates the size to fill the value (as
+        #   > 'sizeof(VALUE)/sizeof(TYPE)':
+        #   >      (gdb) p/x (short[])0x12345678
+        #   >      $2 = {0x1234, 0x5678}
+        # This means we don't have to special-case registers if we're comparing their
+        # raw bytes, as `p/x (char[])$reg` will print the full value of the register as
+        # a byte (char) array - this also works with vector registers.
+        # This is what this fallback does - prints the whole register as a byte array.
+        (lambda _: True, lambda regs: [f"p/x (char[])${reg}" for reg in regs]),
     ]
 
     def __init__(self, args: argparse.Namespace, renode_proc: pexpect.spawn, ref_proc: pexpect.spawn):
@@ -407,7 +402,7 @@ class GDBComparator:
 
     async def progress_by(self, delta: int, type: str = "stepi") -> None:
         """Steps `delta` times in all owned instances."""
-        adjusted_timeout = max(120, int(delta) / 5)
+        adjusted_timeout = max(1200, int(delta) / 5)
         await self.run_command(type + (f" {delta}" if int(delta) > 1 else ""), timeout=adjusted_timeout)
 
     async def compare_instances(self, previous_pc: str) -> None:
@@ -457,7 +452,7 @@ class GDBComparator:
 def setup_processes(args: argparse.Namespace) -> tuple[Renode, pexpect.spawn, GDBComparator]:
     """Spawns Renode, the reference process, `GDBComparator` and returns their handles (in that order)."""
     reference = pexpect.spawn(args.reference_command, timeout=10)
-    renode = Renode(args.renode_path, args.renode_telnet_port)
+    renode = Renode(args.renode_path)
     renode.command("include @" + path.abspath(args.renode_script), expected_log="System bus created")
     renode.command(f"machine StartGdbServer {args.renode_gdb_port}", expected_log=f"started on port :{args.renode_gdb_port}")
     gdb_comparator = GDBComparator(args, renode.proc, reference)
@@ -582,8 +577,6 @@ async def main() -> None:
     args = parser.parse_args()
     assert 0 <= args.reference_gdb_port <= 65535, "Illegal reference GDB port"
     assert 0 <= args.renode_gdb_port <= 65535, "Illegal Renode GDB port"
-    assert 0 <= args.renode_telnet_port <= 65535, "Illegal Renode Telnet port"
-    assert args.reference_gdb_port != args.renode_gdb_port != args.renode_telnet_port, "Overlapping port numbers"
     if args.stop_address:
         args.stop_address = int(args.stop_address, 16)
 

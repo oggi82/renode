@@ -17,14 +17,36 @@ Create Machine
     Execute Command               mach create
     Execute Command               machine LoadPlatformDescription @platforms/cpus/cortex-a53-gicv${gic_version}.repl
 
-    Create Terminal Tester        ${UART}
+    Create Terminal Tester        ${UART}  defaultPauseEmulation=True
+    Execute Command               showAnalyzer ${UART}
 
 Step And Verify Accumulator
     [Arguments]    ${expected_value}
 
     Execute Command               cpu Step
-    ${acc} =  Execute Command     cpu GetRegisterUnsafe 0
+    ${acc} =  Execute Command     cpu GetRegister 0
     Should Be Equal As Integers   ${acc}  ${expected_value}  base=16
+
+Verify System Registers
+    [Arguments]    ${names}  ${expected_values}
+
+    ${names_length} =   Get Length    ${names}
+    ${values_length} =  Get Length    ${expected_values}
+    Should Be Equal  ${names_length}  ${values_length}
+
+    ${all_values} =  Execute Command    cpu GetAllSystemRegisterValues
+    FOR    ${index}    IN RANGE  ${names_length}
+        ${name} =  Set Variable  ${names[${index}]}
+        ${expected_value} =  Set Variable  ${expected_values[${index}]}
+
+        ${match} =  Get Regexp Matches  ${all_values}  ${name}.*(0x[0-9A-F]+)  1  flags=MULTILINE
+        IF  ${match}
+            Should Be Equal    ${match[0]}    ${expected_value}
+            ...  msg="Invalid value of '${name}' system register: ${match[0]}; expected: ${expected_value}"
+        ELSE
+            Fail  "${name} not found in the system registers list: ${all_values}"
+        END
+    END
 
 Verify Timer Register
     [Arguments]    ${system_register_name}    ${timer_register_name}
@@ -33,6 +55,17 @@ Verify Timer Register
     Wait For Log Entry            Read from ${timer_register_name}
 
 *** Test Cases ***
+Should Get Correct EL and SS on CPU Creation
+    # This platform uses `Cortex-A53` CPU - ARMv8A
+    # We only check if EL and SS are reflected correctly on C# side, for their usage in peripherals
+    Create Machine
+
+    ${ss}=                             Execute Command  sysbus.cpu SecurityState
+    ${el}=                             Execute Command  sysbus.cpu ExceptionLevel
+
+    Should Be Equal As Strings         ${ss.split()[0].strip()}  Secure
+    Should Be Equal As Strings         ${el.split()[0].strip()}  EL3_MonitorMode
+
 Test Accessing ARM Generic Timer Registers Through AArch64 System Registers
     Create Machine
     Create Log Tester             0
@@ -83,20 +116,42 @@ Test Accessing ARM Generic Timer Registers Through AArch64 System Registers
     Verify Timer Register         CNTV_CVAL_EL0      EL1VirtualTimerCompareValue
     Verify Timer Register         CNTV_TVAL_EL0      EL1VirtualTimerValue
 
+Test Accessing System Registers
+    Create Machine
+
+    ${MIDR_val} =         Set Variable  0x410FD034
+    ${new_DAIF} =         Set Variable  0x180
+    ${new_NZCV} =         Set Variable  0xA0000000
+    ${new_SCTLR} =        Set Variable  0xDEADBEEF
+
+    @{register_names} =   Create List   DAIF   MIDR_EL1     NZCV        SCTLR_EL3
+    @{expected_values} =  Create List   0x3C0  ${MIDR_val}  0x40000000  0xC50838
+
+    Verify System Registers       ${register_names}  ${expected_values}
+
+    # MIDR_EL1 is a Read-Only register. Setting it should fail.
+    Run Keyword And Expect Error  KeywordException: *Writing the MIDR_EL1 register isn't supported*
+    ...  Execute Command          cpu SetSystemRegisterValue "MIDR_EL1" 0xDEADBEEF
+
+    Execute Command               cpu SetSystemRegisterValue "DAIF" ${new_DAIF}
+    Execute Command               cpu SetSystemRegisterValue "NZCV" ${new_NZCV}
+    Execute Command               cpu SetSystemRegisterValue "SCTLR_EL3" ${new_SCTLR}
+
+    @{expected_values} =  Create List   ${new_DAIF}  ${MIDR_val}  ${new_NZCV}  ${new_SCTLR}
+    Verify System Registers       ${register_names}  ${expected_values}
+
 Test CRC32X
     Create Machine
-    Execute Command               cpu ExecutionMode SingleStepBlocking
-    Start Emulation
 
     Execute Command               sysbus WriteDoubleWord 0x0 0x9ac34c00  # crc32x  w0, w0, x3
     Execute Command               sysbus WriteDoubleWord 0x4 0x9ac44c00  # crc32x  w0, w0, x4
 
     # Set the initial accumulator value.
-    Execute Command               cpu SetRegisterUnsafeUlong 0 0xcafebee
+    Execute Command               cpu SetRegisterUlong 0 0xcafebee
 
     # Set source registers.
-    Execute Command               cpu SetRegisterUnsafeUlong 3 0x1234567890abcdef
-    Execute Command               cpu SetRegisterUnsafeUlong 4 0xfedcba0987654321
+    Execute Command               cpu SetRegisterUlong 3 0x1234567890abcdef
+    Execute Command               cpu SetRegisterUlong 4 0xfedcba0987654321
 
     # CRC has many caveats with conversions done on input/output/accumulator.
     # Let's make sure a proper version is used. Mono used to overwrite tlib's
@@ -107,18 +162,16 @@ Test CRC32X
 
 Test CRC32CX
     Create Machine
-    Execute Command               cpu ExecutionMode SingleStepBlocking
-    Start Emulation
 
     Execute Command               sysbus WriteDoubleWord 0x0 0x9ac35c00  # crc32cx  w0, w0, x3
     Execute Command               sysbus WriteDoubleWord 0x4 0x9ac45c00  # crc32cx  w0, w0, x4
 
     # Set the initial accumulator value.
-    Execute Command               cpu SetRegisterUnsafeUlong 0 0xcafebee
+    Execute Command               cpu SetRegisterUlong 0 0xcafebee
 
     # Set source registers.
-    Execute Command               cpu SetRegisterUnsafeUlong 3 0x1234567890abcdef
-    Execute Command               cpu SetRegisterUnsafeUlong 4 0xfedcba0987654321
+    Execute Command               cpu SetRegisterUlong 3 0x1234567890abcdef
+    Execute Command               cpu SetRegisterUlong 4 0xfedcba0987654321
 
     Step And Verify Accumulator   0x8da20236
     Step And Verify Accumulator   0xbcfc085a
@@ -127,16 +180,18 @@ Test Running the Hello World Zephyr Sample
     Create Machine
     Execute Command               sysbus LoadELF ${ZEPHYR_HELLO_WORLD_ELF}
 
-    Start Emulation
-
     Wait For Line On Uart         Booting Zephyr OS
+    Provides                      zephyr-hello-world-after-booting
+    Wait For Line On Uart         Hello World!
+
+Test Resuming Zephyr Hello World After Deserialization
+    Requires                      zephyr-hello-world-after-booting
+    Execute Command               showAnalyzer ${UART}
     Wait For Line On Uart         Hello World!
 
 Test Running the Zephyr Synchronization Sample
     Create Machine
     Execute Command               sysbus LoadELF ${ZEPHYR_SYNCHRONIZATION_ELF}
-
-    Start Emulation
 
     Wait For Line On Uart         Booting Zephyr OS
     Wait For Line On Uart         thread_a: Hello World from cpu 0
@@ -148,8 +203,6 @@ Test Running the Zephyr Philosophers Sample
     Create Machine
     Execute Command               sysbus LoadELF ${ZEPHYR_PHILOSOPHERS_ELF}
 
-    Start Emulation
-
     Wait For Line On Uart         Booting Zephyr OS
     Wait For Line On Uart         Philosopher 5.*STARVING  treatAsRegex=true
     Wait For Line On Uart         Philosopher 5.*HOLDING ONE FORK  treatAsRegex=true
@@ -159,8 +212,6 @@ Test Running the Zephyr Philosophers Sample
 Test Running the Zephyr Kernel FPU Sharing Generic Test
     Create Machine
     Execute Command               sysbus LoadELF ${ZEPHYR_FPU_SHARING_ELF}
-
-    Start Emulation
 
     Wait For Line On Uart         Booting Zephyr OS
     Wait For Line On Uart         Running TESTSUITE fpu_sharing_generic
@@ -184,8 +235,6 @@ Test Running the seL4 Adder Sample
     Execute Command               ${UART} WriteDoubleWord 0x30 0x301
     # Set 7-bit word length to hush the warning that 5-bit WLEN is unsupported.
     Execute Command               ${UART} WriteDoubleWord 0x2c 0x40  #b10 << 5
-
-    Start Emulation
 
     Wait For Line On Uart         Booting all finished, dropped to user space
     Wait For Line On Uart         client: what's the answer to 342 + 74 + 283 + 37 + 534 ?

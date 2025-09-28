@@ -1,40 +1,41 @@
 # pylint: disable=C0301,C0103,C0111
-from __future__ import print_function
 from sys import platform
+from platform import machine
 import os
 import signal
 import psutil
 import subprocess
 from time import monotonic
+from typing import Dict, List
 
 import xml.etree.ElementTree as ET
 import glob
 
 from tests_engine import TestResult
 
-this_path = os.path.abspath(os.path.dirname(__file__))
+
+THIS_PATH = os.path.abspath(os.path.dirname(__file__))
+
 
 def install_cli_arguments(parser):
     parser.add_argument("--properties-file", action="store", help="Location of properties file.")
     parser.add_argument("--skip-building", action="store_true", help="Do not build tests before run.")
     parser.add_argument("--force-net-framework-version", action="store", dest="framework_ver_override", help="Override target .NET Framework version when building tests.")
 
+
 class NUnitTestSuite(object):
-    nunit_path = os.path.join(this_path, './../lib/resources/tools/nunit3/nunit3-console.exe')
+    nunit_path = os.path.join(THIS_PATH, './../lib/resources/tools/nunit3/nunit3-console.exe')
 
     def __init__(self, path):
-        #super(NUnitTestSuite, self).__init__(path)
         self.path = path
-    
-    def check(self, options, number_of_runs): #API requires this method 
-        pass 
 
+    def check(self, options, number_of_runs): # API requires this method
+        pass
 
     def get_output_dir(self, options, iteration_index, suite_retry_index):
         # Unused mechanism, this exists to keep a uniform interface with
         # robot_tests_provider.py.
         return options.results_directory
-
 
     # NOTE: if we switch to using msbuild on all platforms, we can get rid of this function and only use the '-' prefix
     def build_params(self, *params):
@@ -51,16 +52,25 @@ class NUnitTestSuite(object):
 
     def prepare(self, options):
         if not options.skip_building:
+            self._adjust_path(options)
             print("Building {0}".format(self.path))
+            arch = 'arm' if machine() in ['aarch64', 'arm64'] else 'i386'
             if options.runner == 'dotnet':
                 self.builder = 'dotnet'
-                params = ['build', '--verbosity', 'quiet', '--configuration', options.configuration, '/p:NET=true']
+                params = ['build', '--verbosity', 'quiet', '--configuration', options.configuration, '/p:NET=true', f'/p:Architecture={arch}']
             else:
                 if platform == "win32":
                     self.builder = 'MSBuild.exe'
                 else:
                     self.builder = 'xbuild'
-                params = self.build_params('p:PropertiesLocation={0}'.format(options.properties_file), 'p:OutputPath={0}'.format(options.results_directory), 'nologo', 'verbosity:quiet', 'p:OutputDir=tests_output', 'p:Configuration={0}'.format(options.configuration))
+                params = self.build_params(
+                    f'p:PropertiesLocation={options.properties_file}',
+                    f'p:OutputPath={options.results_directory}',
+                    'nologo',
+                    'verbosity:quiet',
+                    'p:OutputDir=tests_output',
+                    f'p:Configuration={options.configuration}',
+                    f'p:Architecture={arch}')
                 if options.framework_ver_override:
                     params += self.build_params(f'p:TargetFrameworkVersion=v{options.framework_ver_override}')
             result = subprocess.call([self.builder, *params, self.path])
@@ -72,6 +82,21 @@ class NUnitTestSuite(object):
 
         return 0
 
+    def _adjust_path(self, options):
+        path, proj = os.path.split(self.path)
+        _match = (options.runner == 'dotnet', proj.endswith("_NET.csproj"))
+        if _match == (True, False):
+                proj_alt = proj[:-7] + "_NET.csproj"
+        elif _match == (False, True):
+                proj_alt = proj[:-11] + ".csproj"
+        else:
+                proj_alt = proj
+        if proj != proj_alt and os.path.exists(path_alt := os.path.join(path, proj_alt)):
+            print(f"{options.runner} runner detected, switching: {proj} -> {proj_alt}")
+            self.path = path_alt
+            return True
+        return False
+
     def _cleanup_dangling(self, process, proc_name, test_agent_name):
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             if proc_name in (proc.info['name'] or ''):
@@ -81,7 +106,7 @@ class NUnitTestSuite(object):
                     print('KILLING A DANGLING {} test process {}'.format(test_agent_name, proc.info['pid']))
                     os.kill(proc.info['pid'], signal.SIGTERM)
 
-    def run(self, options, run_id, iteration_index=1, suite_retry_index=0):
+    def run(self, options, iteration_index=1, suite_retry_index=0):
         # The iteration_index and suite_retry_index arguments are not implemented.
         # They exist for the sake of a uniform interface with robot_tests_provider.
         print('Running ' + self.path)
@@ -106,9 +131,8 @@ class NUnitTestSuite(object):
             if options.port is not None:
                 if options.suspend:
                     print('Waiting for a debugger at port: {}'.format(options.port))
-                else:
-                    args.insert(1, '--debug')
-                    args.insert(2, '--debugger-agent=transport=dt_socket,server=y,suspend={0},address=127.0.0.1:{1}'.format('y' if options.suspend else 'n', options.port))
+                args.insert(1, '--debug')
+                args.insert(2, '--debugger-agent=transport=dt_socket,server=y,suspend={0},address=127.0.0.1:{1}'.format('y' if options.suspend else 'n', options.port))
             elif options.debug_mode:
                 args.insert(1, '--debug')
 
@@ -119,13 +143,14 @@ class NUnitTestSuite(object):
             else:
                 where_conditions.append('test =~ .*{}.*'.format(options.fixture))
 
+        cat = 'TestCategory' if options.runner == 'dotnet' else 'cat'
+        equals = '=' if options.runner == 'dotnet' else '=='
         if options.exclude:
-            cat = 'TestCategory' if options.runner == 'dotnet' else 'cat'
             for category in options.exclude:
                 where_conditions.append('{} != {}'.format(cat, category))
         if options.include:
             for category in options.include:
-                where_conditions.append('{} == {}'.format(cat, category))
+                where_conditions.append('{} {} {}'.format(cat, equals, category))
 
         if where_conditions:
             if options.runner == 'dotnet':
@@ -143,6 +168,10 @@ class NUnitTestSuite(object):
             process = subprocess.Popen(args)
             print('dotnet test runner PID is {}'.format(process.pid), flush=True)
         else:
+            if platform != "win32":
+                # This is alias for '--process=Single' - means no TCP connection at all so that we can see what happens underneath
+                # This causes failure on some Windows setups
+                args.append("--inprocess")
             process = subprocess.Popen(args, cwd=options.results_directory)
             print('NUnit3 runner PID is {}'.format(process.pid), flush=True)
 
@@ -160,12 +189,15 @@ class NUnitTestSuite(object):
     def cleanup(self, options):
         pass
 
-
     def should_retry_suite(self, options, iteration_index, suite_retry_index):
         # Unused mechanism, this exists to keep a uniform interface with
         # robot_tests_provider.py.
         return False
 
+    def tests_failed_due_to_renode_crash(self) -> bool:
+        # Unused mechanism, this exists to keep a uniform interface with
+        # robot_tests_provider.py.
+        return False
 
     @staticmethod
     def find_failed_tests(path, files_pattern='*.csproj.xml'):
@@ -192,7 +224,6 @@ class NUnitTestSuite(object):
         if not ret['mandatory']:
             return None
         return ret
-
 
     @staticmethod
     def find_rerun_tests(path):

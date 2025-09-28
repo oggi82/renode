@@ -1,20 +1,21 @@
 //
-// Copyright (c) 2010-2022 Antmicro
+// Copyright (c) 2010-2024 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text;
+
 using Antmicro.Migrant;
 using Antmicro.Renode.Core;
 using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Peripherals.UART;
+using Antmicro.Renode.Peripherals.USB;
 using Antmicro.Renode.Utilities;
+
 using TermSharp.Vt100;
 
 namespace Antmicro.Renode.Integrations
@@ -24,7 +25,29 @@ namespace Antmicro.Renode.Integrations
         public static void RecordToAsciinema(this IUART uart, string filePath, bool useVirtualTimeStamps = false, int width = 80, int height = 24)
         {
             var emulation = EmulationManager.Instance.CurrentEmulation;
-            if(!emulation.TryGetMachineForPeripheral(uart, out var machine))
+            IMachine machine = null;
+            // This is a temporary solution and should be addressed later
+            var cdcAcmUart = uart as CDCToUARTConverter;
+            if(cdcAcmUart != null)
+            {
+                // In USB, the CDC ACM UART isn't enabled before enumeration.
+                // We use Children here, assuming that after enumeration the
+                // UART will be available.
+                var devices = cdcAcmUart.Children;
+                foreach(var device in devices)
+                {
+                    if(emulation.TryGetMachineForPeripheral(device.Peripheral, out machine))
+                    {
+                        break;
+                    }
+                }
+
+                if(machine == null)
+                {
+                    throw new RecoverableException("Could not find machine for the given CDC ACM UART");
+                }
+            }
+            else if(!emulation.TryGetMachineForPeripheral(uart, out machine))
             {
                 throw new RecoverableException("Could not find machine for the given UART");
             }
@@ -37,7 +60,7 @@ namespace Antmicro.Renode.Integrations
     }
 
     [Transient]
-    public class AsciinemaRecorder: IConnectable<IUART>, IDisposable, IExternal
+    public class AsciinemaRecorder : IConnectable<IUART>, IDisposable, IExternal
     {
         public AsciinemaRecorder(string filePath, IMachine machine, string name, bool useVirtualTimeStamps, int width, int height)
         {
@@ -74,6 +97,19 @@ namespace Antmicro.Renode.Integrations
             writer = null;
         }
 
+        private static readonly List<Tuple<string, string>> mappings = new List<Tuple<string, string>>
+        {
+            {"\\",     "\\\\"},
+            {"\u0007", "\\a"},
+            {"\u0008", "\\b"},
+            {"\u0009", "\\t"},
+            {"\u000a", "\\n"},
+            {"\u000b", "\\v"},
+            {"\u000c", "\\f"},
+            {"\u000d", "\\r"},
+            {"\"",     "\\\""}
+        };
+
         private void HandleCharReceived(string data)
         {
             data = EncodeNonPrintableCharacters(data);
@@ -96,15 +132,10 @@ namespace Antmicro.Renode.Integrations
                 value = value.Replace(mapping.Item1, mapping.Item2);
             }
             var builder = new StringBuilder();
-            var nonPrintable = new UnicodeCategory[]
-            {
-                UnicodeCategory.Control,
-                UnicodeCategory.OtherNotAssigned,
-                UnicodeCategory.Surrogate
-            };
             foreach(var c in value)
             {
-                if(nonPrintable.Contains(char.GetUnicodeCategory(c)) || char.IsControl(c))
+                bool isAscii = c < 128;
+                if(!isAscii || char.IsControl(c))
                 {
                     var encodedValue = "\\u" + ((int)c).ToString("x4");
                     builder.Append(encodedValue);
@@ -116,18 +147,6 @@ namespace Antmicro.Renode.Integrations
             }
             return builder.ToString();
         }
-
-        private static List<Tuple<string, string>> mappings = new List<Tuple<string, string>>
-        {
-            {"\u0007", "\\a"},
-            {"\u0008", "\\b"},
-            {"\u0009", "\\t"},
-            {"\u000a", "\\n"},
-            {"\u000b", "\\v"},
-            {"\u000c", "\\f"},
-            {"\u000d", "\\r"},
-            {"\"",     "\\\""}
-        };
 
         private StreamWriter writer;
         private IUART uart;

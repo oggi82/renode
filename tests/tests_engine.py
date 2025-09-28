@@ -31,7 +31,8 @@ class IncludeLoader(yaml.SafeLoader):
                 if isinstance(val, str):
                     lst[idx] = os.path.join(prefix, lst[idx])
                 elif isinstance(val, dict):
-                    _append_prefix(val.values()[0], prefix)
+                    v = next(iter(val.values()))
+                    _append_prefix(v, prefix)
                 else:
                     raise Exception('Unsupported list element: ' + val)
 
@@ -155,6 +156,18 @@ def prepare_parser():
                         default=None,
                         help="Generate perf.data from test in specified directory")
 
+    parser.add_argument("--runner",
+                        dest="runner",
+                        action="store",
+                        default=None,
+                        help=".NET runner.")
+
+    parser.add_argument("--net",
+                        dest="discarded",
+                        action="store_const",
+                        const="dotnet",
+                        help="Flag is deprecated and has no effect.")
+
     if platform != "win32":
         parser.add_argument("-p", "--port",
                             dest="port",
@@ -229,6 +242,28 @@ def handle_options(options):
 
     options.configuration = 'Debug' if options.debug_mode else 'Release'
 
+    if options.remote_server_full_directory is not None:
+        if not os.path.isabs(options.remote_server_full_directory):
+            options.remote_server_full_directory = os.path.join(this_path, options.remote_server_full_directory)
+    else:
+        options.remote_server_full_directory = os.path.join(options.remote_server_directory_prefix, options.configuration)
+
+    try:
+        # Try to infer the runner based on the build type
+        with open(os.path.join(options.remote_server_full_directory, "build_type"), "r") as f:
+            options.runner = f.read().strip()
+        if platform == "win32" and options.runner != "dotnet":
+            options.runner = "none" # .NET Framework applications run natively on Windows
+    except:
+        # Fallback to the explicitly provided runner or platform's default if nothing was passed
+        if options.runner is None:
+            options.runner = "mono" if platform.startswith("linux") or platform == "darwin" else "none"
+
+    # Apply the dotnet telemetry optout in this script instead of the shell wrappers as it's
+    # portable between OSes
+    if options.runner == 'dotnet':
+        os.putenv("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+
 
 def register_handler(handler_type, extension, creator, before_parsing=None, after_parsing=None):
     registered_handlers.append({'type': handler_type, 'extension': extension, 'creator': creator, 'before_parsing': before_parsing, 'after_parsing': after_parsing})
@@ -281,10 +316,10 @@ def configure_output(options):
 
 def run_test_group(args):
 
-    group, options, test_id = args
+    group, options = args
 
     iteration_counter = 0
-    tests_failed = False
+    group_failed = False
     log_files = set()
 
     # this function will be called in a separate
@@ -303,34 +338,43 @@ def run_test_group(args):
         for suite in group:
             retry_suites_counter = 0
             should_retry_suite = True
-            while should_retry_suite and retry_suites_counter < options.retry_count:
-                retry_suites_counter += 1
+            suite_failed = False
 
-                if retry_suites_counter > 1:
-                    print("Retrying suite, attempt {} of {}...".format(retry_suites_counter, options.retry_count))
+            try:
+                while should_retry_suite and retry_suites_counter < options.retry_count:
+                    retry_suites_counter += 1
 
-                # we need to collect log files here instead of appending to a global list
-                # in each suite runner because this function will be called in a multiprocessing
-                # context when using the --jobs argument, as mentioned above
-                ok, suite_log_files = suite.run(options,
-                                                run_id=test_id if options.jobs != 1 else 0,
-                                                iteration_index=iteration_counter,
-                                                suite_retry_index=retry_suites_counter - 1)
-                log_files.update((type(suite), log_file) for log_file in suite_log_files)
-                if ok:
-                    tests_failed = False
-                    should_retry_suite = False
-                else:
-                    tests_failed = True
-                    should_retry_suite = suite.should_retry_suite(options, iteration_counter, retry_suites_counter - 1)
-                    if options.retry_count > 1 and not should_retry_suite:
-                        print("No Robot<->Renode connection issues were detected to warrant a suite retry - giving up.")
+                    if retry_suites_counter > 1:
+                        print("Retrying suite, attempt {} of {}...".format(retry_suites_counter, options.retry_count))
 
-        if options.stop_on_error and tests_failed:
+                    # we need to collect log files here instead of appending to a global list
+                    # in each suite runner because this function will be called in a multiprocessing
+                    # context when using the --jobs argument, as mentioned above
+                    ok, suite_log_files = suite.run(options,
+                                                    iteration_index=iteration_counter,
+                                                    suite_retry_index=retry_suites_counter - 1)
+                    log_files.update((type(suite), log_file) for log_file in suite_log_files)
+                    if ok:
+                        suite_failed = False
+                        should_retry_suite = False
+                    else:
+                        suite_failed = True
+                        should_retry_suite = suite.should_retry_suite(options, iteration_counter, retry_suites_counter - 1)
+                        if options.retry_count > 1 and not should_retry_suite:
+                            print("No Robot<->Renode connection issues were detected to warrant a suite retry - giving up.")
+            except Exception as e:
+                print(f"Exception occurred when running {suite.path}:")
+                import traceback
+                traceback.print_exception(e)
+                raise
+
+            if suite_failed:
+                group_failed = True
+        if options.stop_on_error and group_failed:
             break
 
     options.output.flush()
-    return (tests_failed, log_files)
+    return (group_failed, log_files)
 
 def print_failed_tests(options):
     for handler in registered_handlers:
@@ -401,6 +445,23 @@ def print_rerun_trace(options):
                     suite_retry_index += 1
         print("------")
 
+# analyzes logs before they are cleaned up to determine
+# if any test failures were caused by a Renode crash.
+#
+# returns:
+# - TRUE only when a test failed on its final run AND
+#   that last failure was caused by a crash
+# - FALSE if the test passed or when one of the runs crashed
+#   but the final retry failed for other reasons such as wrong result
+#
+# when running multiple test suites returns TRUE if ANY failed due to a crash.
+def failed_due_to_crash(options) -> bool:
+    for group in options.tests:
+        for suite in options.tests[group]:
+            if suite.tests_failed_due_to_renode_crash():
+                return True
+
+    return False
 
 def run():
     parser = prepare_parser()
@@ -422,15 +483,9 @@ def run():
 
     print("Preparing suites")
 
-    test_id = 0
     args = []
     for group in options.tests.values():
-        args.append((group, options, test_id))
-        test_id += 1
-
-    for group in options.tests:
-        for suite in options.tests[group]:
-            suite.check(options, number_of_runs=test_id if options.jobs != 1 else 1)
+        args.append((group, options))
 
     for group in options.tests:
         for suite in options.tests[group]:
@@ -469,6 +524,10 @@ def run():
 
     print("Cleaning up suites")
 
+    # check if renode crash caused a failed test based on logs for tested suites
+    # before the log files are cleaned up
+    test_failed_due_to_crash: bool = tests_failed and failed_due_to_crash(options)
+
     for group in options.tests:
         for suite in options.tests[group]:
             type(suite).log_files = logs_per_type[type(suite)]
@@ -482,6 +541,9 @@ def run():
         print("Some tests failed :( See the list of failed tests below and logs for details!")
         print_failed_tests(options)
         print_rerun_trace(options)
+        if test_failed_due_to_crash:
+            print('Renode crashed during testing and caused a failure', file=sys.stderr)
+            sys.exit(2)
         sys.exit(1)
     print("Tests finished successfully :)")
     print_rerun_trace(options)

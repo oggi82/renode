@@ -65,12 +65,12 @@ gic: IRQControllers.ARM_GenericInterruptController @ {
         sysbus new Bus.BusMultiRegistration { address: 0xF8F01000; size: 0x1000; region: "distributor" };
         sysbus new Bus.BusMultiRegistration { address: 0xF8F00100; size: 0x100; region: "cpuInterface" }
     }
-    0 -> cpu@0
     supportsTwoSecurityStates: false
     architectureVersion: IRQControllers.ARM_GenericInterruptControllerVersion.GICv1
     CPUInterfaceProductIdentifier: 0x390
     CPUInterfaceRevision: 0x2
     CPUInterfaceImplementer: 0x43B
+    // GIC -> ARM CPU interrupt connections are generated automatically
 
 scu: Miscellaneous.ArmSnoopControlUnit @ sysbus 0xF8F00000
 
@@ -95,11 +95,25 @@ slcr: Miscellaneous.Zynq7000_SystemLevelControlRegisters @ sysbus 0xF8000000
 nand: Python.PythonPeripheral @ sysbus 0xE000E000
     size: 0x4
     initable: false
-    script: "request.value = 0xFFFFFFFF"
+    script: "request.Value = 0xFFFFFFFF"
+
+dma_pl330: DMA.PL330_DMA @ sysbus 0xF8003000
+    numberOfSupportedEventsAndInterrupts: 16
+    numberOfSupportedPeripheralRequestInterfaces: 4
+    AbortIRQ -> gic@13
+    [0-3] -> gic@[14-17]
+    [4-7] -> gic@[40-43]
+    AXIBusWidth: 64
+    DataBufferDepth: 1
+    InstructionCacheLinesNumber: 8
+    InstructionCacheLineLength: 16
+    ReadQueueDepth: 16
+    WriteQueueDepth: 16
+    WriteIssuingCapability: 8
+    ReadIssuingCapability: 8
 
 sysbus:
     init:
-        Tag <0xF8003000,0xF8003FFF> "ARM_PL330DMA"
         Tag <0xF8007000,0xF8007FFF> "Xilinx_DeviceConfigurationInterface"
         Tag <0xF8801000,0xF8801FFF> "ARM_CoreSightEmbeddedTraceBuffer"
         Tag <0xF8803000,0xF8803FFF> "ARM_CoreSightTracePacketOutput"

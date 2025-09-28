@@ -1,17 +1,18 @@
 //
-// Copyright (c) 2010-2018 Antmicro
+// Copyright (c) 2010-2024 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
+using System.Collections.Generic;
 using System.Linq;
-using Antmicro.Renode.Time;
+
 using Antmicro.Renode.Core;
 using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Logging;
-using System.Collections.Generic;
-using Antmicro.Renode.Utilities;
 using Antmicro.Renode.Peripherals;
+using Antmicro.Renode.Time;
+using Antmicro.Renode.Utilities;
 
 namespace Antmicro.Renode.Connectors
 {
@@ -45,7 +46,7 @@ namespace Antmicro.Renode.Connectors
             {
                 vts = new TimeStamp(default(TimeInterval), EmulationManager.ExternalWorld);
             }
-            
+
             var endpoints = connectorPin.Endpoints;
             for(var i = 0; i < endpoints.Count; i++)
             {
@@ -67,10 +68,6 @@ namespace Antmicro.Renode.Connectors
                 sourcePin.Disconnect();
             }
             sourcePin = tempPin ?? throw new RecoverableException("Source PIN cannot be selected.");
-            if(sourcePin.IsConnected)
-            {
-                this.Log(LogLevel.Warning, "Overwriting source PIN connection.");
-            }
             sourcePin.Connect(this, 0);
         }
 
@@ -140,10 +137,10 @@ namespace Antmicro.Renode.Connectors
             Reset();
         }
 
-        private readonly IGPIO connectorPin;
-
         private IMachine destinationMachine;
         private IGPIO sourcePin;
-        private ISet<IPeripheral> peripherals = new HashSet<IPeripheral>();
+        private readonly ISet<IPeripheral> peripherals = new HashSet<IPeripheral>();
+
+        private readonly IGPIO connectorPin;
     }
 }

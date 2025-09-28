@@ -1,19 +1,19 @@
 *** Variables ***
 ${csr_script}=  SEPARATOR=
-...  if request.isRead:                                                  ${\n}${SPACE}
+...  if request.IsRead:                                                  ${\n}${SPACE}
 ...      cpu.DebugLog('CSR read!')                                       ${\n}
-...  elif request.isWrite:                                               ${\n}${SPACE}
-...      cpu.DebugLog('CSR written: {}!'.format(hex(request.value)))
+...  elif request.IsWrite:                                               ${\n}${SPACE}
+...      cpu.DebugLog('CSR written: {}!'.format(hex(request.Value)))
 
 ${xadd}=  SEPARATOR=
-...  src_reg_a = instruction & 0xF                                                                   ${\n}
+...  src_reg_a = (instruction >> 3) & 0xF                                                            ${\n}
 ...  src_reg_b = (instruction >> 12) & 0xF                                                           ${\n}
-...  res = cpu.GetRegisterUnsafe(src_reg_a).RawValue + cpu.GetRegisterUnsafe(src_reg_b).RawValue     ${\n}
+...  res = cpu.GetRegister(src_reg_a).RawValue + cpu.GetRegister(src_reg_b).RawValue                 ${\n}
 ...  state['res'] = res
 
 ${xmv}=  SEPARATOR=
-...  dst_reg = instruction & 0xF                                         ${\n}
-...  cpu.SetRegisterUnsafe(dst_reg, state['res'])                        
+...  dst_reg = (instruction >> 3) & 0xF                                  ${\n}
+...  cpu.SetRegister(dst_reg, state['res'])                        
 
 *** Keywords ***
 Create Machine
@@ -21,7 +21,6 @@ Create Machine
     Execute Command                             machine LoadPlatformDescriptionFromString "cpu: CPU.RiscV64 @ sysbus { cpuType: \\"rv64imac_zicsr\\"; timeProvider: empty }"
     Execute Command                             machine LoadPlatformDescriptionFromString "mem: Memory.MappedMemory @ sysbus 0x0 { size: 0x1000 }"
 
-    Execute Command                             sysbus.cpu ExecutionMode SingleStepBlocking
     Execute Command                             sysbus.cpu PC 0x0
 
 Load Code To Memory
@@ -39,12 +38,11 @@ Should Install Custom 16-bit Instruction
     Create Machine
     Create Log Tester                           1
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001110" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             logLevel 0
-    Execute Command                             sysbus WriteWord 0x0 0xb38f
+    Execute Command                             sysbus WriteWord 0x0 0xb38e
 
     Execute Command                             log "--- start ---"
-    Start Emulation
     Execute Command                             sysbus.cpu Step
     Execute Command                             log "--- stop ---"
 
@@ -52,16 +50,39 @@ Should Install Custom 16-bit Instruction
     Wait For Log Entry                          custom instruction executed! 
     Wait For Log Entry                          --- stop ---
 
+Should Not Install Custom Instructions With Invalid Length Encoding
+    Create Machine
+
+    # 16 bit
+    Run Keyword And Expect Error                *Pattern 0xB38F is invalid for 16 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxAA, AA != 11*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111" "cpu.DebugLog('custom instruction executed!')"
+
+    # 32 bit
+    Run Keyword And Expect Error                *Pattern 0xB38F0F82 is invalid for 32 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxxxxxxxxxxxxxxBBB11, BBB != 111*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110000010" "cpu.DebugLog('custom instruction executed!')"
+
+    Run Keyword And Expect Error                *Pattern 0xB38F0F9F is invalid for 32 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxxxxxxxxxxxxxxBBB11, BBB != 111*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110011111" "cpu.DebugLog('custom instruction executed!')"
+
+    Run Keyword And Expect Error                *Pattern 0xB38F0F9E is invalid for 32 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxxxxxxxxxxxxxxBBB11, BBB != 111*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110011110" "cpu.DebugLog('custom instruction executed!')"
+
+    # 64 bit
+    Run Keyword And Expect Error                *Pattern 0xB38F0F82B38F0FBB is invalid for 64 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0111111*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111110111011" "cpu.DebugLog('custom instruction executed!')"
+
+    Run Keyword And Expect Error                *Pattern 0xB38F0F82B38F0FFF is invalid for 64 bits long instruction. Expected instruction in format: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0111111*
+    ...    Execute Command                      sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111111111111" "cpu.DebugLog('custom instruction executed!')"
+
 Should Install Custom 32-bit Instruction
     Create Machine
     Create Log Tester                           1
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110000010" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "10110011100011110000111110000011" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             logLevel 0
-    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f82
+    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f83
 
     Execute Command                             log "--- start ---"
-    Start Emulation
     Execute Command                             sysbus.cpu Step
     Execute Command                             log "--- stop ---"
 
@@ -73,13 +94,12 @@ Should Install Custom 64-bit Instruction
     Create Machine
     Create Log Tester                           1
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111110000010" "cpu.DebugLog('custom instruction executed!')"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111000001010110011100011110000111110111111" "cpu.DebugLog('custom instruction executed!')"
     Execute Command                             logLevel 0
-    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0f82
+    Execute Command                             sysbus WriteDoubleWord 0x0 0xb38f0fbf
     Execute Command                             sysbus WriteDoubleWord 0x4 0xb38f0f82
 
     Execute Command                             log "--- start ---"
-    Start Emulation
     Execute Command                             sysbus.cpu Step
     Execute Command                             log "--- stop ---"
 
@@ -100,7 +120,6 @@ Should Override An Existing 32-bit Instruction
     Register Should Be Equal                    1  0x0
 
     Execute Command                             log "--- start ---"
-    Start Emulation
     Execute Command                             sysbus.cpu Step
     Execute Command                             log "--- stop ---"
 
@@ -114,8 +133,8 @@ Should Install Custom 32-bit Instructions Sharing State
     Create Machine
     Create Log Tester                           1
 
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111bbbb11111000aaaa" "${xadd}"
-    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111000011111011aaaa" "${xmv}"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "1011001110001111bbbb11111aaaa011" "${xadd}"
+    Execute Command                             sysbus.cpu InstallCustomInstructionHandlerFromString "0011001110001111000011111aaaa011" "${xmv}"
 
     # li x1, 0x147
     Execute Command                             sysbus WriteDoubleWord 0x0 0x14700093 
@@ -123,15 +142,14 @@ Should Install Custom 32-bit Instructions Sharing State
     Execute Command                             sysbus WriteDoubleWord 0x4 0x01900113
 
     # add values of x1 and x2 and store in the local register
-    Execute Command                             sysbus WriteDoubleWord 0x8 0xB38F2F81
+    Execute Command                             sysbus WriteDoubleWord 0x8 0xB38F2F8B
     # move the local register to x3
-    Execute Command                             sysbus WriteDoubleWord 0xC 0xB38F0FB3
+    Execute Command                             sysbus WriteDoubleWord 0xC 0x338F0F9B
 
     Register Should Be Equal                    1  0x0
     Register Should Be Equal                    2  0x0
     Register Should Be Equal                    3  0x0
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step 2
 
     Register Should Be Equal                    1  0x147
@@ -159,7 +177,6 @@ Should Register Simple Custom CSR
     Register Should Be Equal                    1  0x0
     Register Should Be Equal                    2  0x0
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step 3
     
     PC Should Be Equal                          0xc
@@ -177,7 +194,6 @@ Should Register Custom CSR
 
     Load Code To Memory
 
-    Start Emulation
     Execute Command                             sysbus.cpu Step 3
     
     ${pc}=  Execute Command                     sysbus.cpu PC

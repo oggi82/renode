@@ -1,12 +1,14 @@
 *** Variables ***
 ${URI}                         @https://dl.antmicro.com/projects/renode
 ${UART}                        sysbus.uart
-${CPU_IBEX_NATIVE_LINUX}       ${URI}/verilated-ibex--libVtop-s_2214528-ebb048cb40ded91b7ddce15a4a9c303f18f36998
-${CPU_IBEX_NATIVE_WINDOWS}     ${URI}/verilated-ibex--libVtop.dll-s_3253532-6f580a2d9bf4f525d5e5e6432d0cb1ff4efa9c75
-${CPU_IBEX_NATIVE_MACOS}       ${URI}/verilated-ibex--libVtop.dylib-s_329984-1446a5b2d8a92b894bf1b78d16c30cd443c28527
+${CPU_IBEX_NATIVE_LINUX}       ${URI}/libVcpu_ibex-Linux-x86_64-13112907851.so-s_2251128-ab2dcb1801188d7f934bdeafa93f9c1edc60ad39
+${CPU_IBEX_NATIVE_WINDOWS}     ${URI}/libVcpu_ibex-Windows-x86_64-13112907851.dll-s_3426669-58d11ffc81ea755c1d1151e6b33fc13164bb13d5
+${CPU_IBEX_NATIVE_MACOS}       ${URI}/libVcpu_ibex-macOS-x86_64-13112907851.dylib-s_336528-7677f09f18bfb2937ad2bffdd63ed7d76bb15d56
+
 
 *** Test Cases ***
 Should Boot
+    [Tags]                          skip_host_arm
     Execute Command            \$cpuLinux?=${CPU_IBEX_NATIVE_LINUX}
     Execute Command            \$cpuWindows?=${CPU_IBEX_NATIVE_WINDOWS}
     Execute Command            \$cpuMacOS?=${CPU_IBEX_NATIVE_MACOS}

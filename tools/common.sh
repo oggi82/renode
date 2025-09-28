@@ -15,7 +15,7 @@ then
     ON_OSX=true
     ON_LINUX=false
     CS_COMPILER=xbuild
-    LAUNCHER="mono64"
+    LAUNCHER="mono"
     PYTHON_RUNNER="python3"
 else
     DETECTED_OS="windows"
@@ -27,6 +27,14 @@ else
     PYTHON_RUNNER="py -3"
 fi
 
+ARCH_UNAME=`uname -m`
+# macOS and Linux uses different names for 64-bit Arm
+if [ "$ARCH_UNAME" == "aarch64" ] || [ "$ARCH_UNAME" == "arm64" ]
+then
+    DETECTED_ARCH="arm"
+else
+    DETECTED_ARCH="x64"
+fi
 function get_path {
     if $ON_WINDOWS
     then

@@ -1,8 +1,8 @@
 ﻿//
-// Copyright (c) 2010-2019 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
-//  This file is licensed under the MIT License.
-//  Full license text is available in 'licenses/MIT.txt'.
+// This file is licensed under the MIT License.
+// Full license text is available in 'licenses/MIT.txt'.
 //
 
 using System.Collections.Generic;
@@ -24,6 +24,7 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
         }
 
         public IrqReceiver DestinationPeripheral { get; private set; }
+
         public IEnumerable<SingleOrMultiIrqEnd> Destinations { get; private set; }
 
         private static string PrettyPrintIrqEnds(IEnumerable<IrqEnd> ends)

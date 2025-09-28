@@ -10,12 +10,12 @@ Write Opcode
 
 Compare Store Status
     [Arguments]                     ${expected}  ${cpu}=0
-    ${value}=                       Execute Command  cpu${cpu} GetRegisterUnsafe ${STATUS_REG}
+    ${value}=                       Execute Command  cpu${cpu} GetRegister ${STATUS_REG}
     Should Be Equal As Integers     ${value}  ${expected}  Unexpected store status on cpu${cpu}
 
 Compare Memory Content
     [Arguments]                     ${expected}  ${cpu}=0
-    ${addr}=                        Execute Command  cpu${cpu} GetRegisterUnsafe ${ADDRESS_REG}
+    ${addr}=                        Execute Command  cpu${cpu} GetRegister ${ADDRESS_REG}
     ${value}=                       Execute Command  sysbus ReadDoubleWord ${addr}
     Should Be Equal As Integers     ${value}  ${expected}  Unexpected memory value on cpu${cpu}
 
@@ -25,11 +25,11 @@ Step
 
 Set Value
     [Arguments]                     ${value}  ${cpu}=0
-    Execute Command                 cpu${cpu} SetRegisterUnsafe ${VALUE_REG} ${value}
+    Execute Command                 cpu${cpu} SetRegister ${VALUE_REG} ${value}
 
 Set Address
     [Arguments]                     ${value}  ${cpu}=0
-    Execute Command                 cpu${cpu} SetRegisterUnsafe ${ADDRESS_REG} ${value}
+    Execute Command                 cpu${cpu} SetRegister ${ADDRESS_REG} ${value}
 
 Create Machine
     [Arguments]                     ${cpu_count}=1
@@ -37,13 +37,12 @@ Create Machine
     Execute Command                 mach create
     FOR  ${i}  IN RANGE  ${cpu_count}
         Execute Command                 machine LoadPlatformDescriptionFromString "cpu${i}: CPU.ARMv7R @ sysbus { cpuType: \\"cortex-r8\\"; cpuId: ${i} }"
-        Execute Command                 cpu${i} ExecutionMode SingleStepBlocking
-        Execute Command                 cpu${i} SetRegisterUnsafe ${ADDRESS_REG} 0x1000
+        Execute Command                 cpu${i} ExecutionMode SingleStep
+        Execute Command                 cpu${i} SetRegister ${ADDRESS_REG} 0x1000
         Execute Command                 cpu${i} PC 0x0
-        Execute Command                 cpu${i} SetRegisterUnsafe ${STATUS_REG} 0x100
+        Execute Command                 cpu${i} SetRegister ${STATUS_REG} 0x100
     END
     Execute Command                 machine LoadPlatformDescriptionFromString "mem: Memory.MappedMemory @ sysbus 0x0 { size: 0x8000000 }"
-    Execute Command                 s
 
 *** Test Cases ***
 Should Store Exclusive Correctly
@@ -163,9 +162,8 @@ Should Serialize Atomic State
 
 Should Use Serialized Atomic State And Store Succesfully
     Requires                        registration-pass
-    Execute Command                 cpu0 ExecutionMode SingleStepBlocking
-    Execute Command                 cpu1 ExecutionMode SingleStepBlocking
-    Execute Command                 s
+    Execute Command                 cpu0 ExecutionMode SingleStep
+    Execute Command                 cpu1 ExecutionMode SingleStep
 
     Set Value                       0xA  cpu=0
     Set Value                       0xB  cpu=1

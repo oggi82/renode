@@ -12,7 +12,6 @@ Create Machine
     Execute Command        using sysbus
 
     Execute Command        cpu PC 0x0
-    Execute Command        cpu ExecutionMode SingleStepBlocking
     Execute Command        sysbus WriteDoubleWord 0x0 0x800593  # 0x0000: li a1, 0x8
     Execute Command        sysbus WriteDoubleWord 0x4 0x13      # 0x0004: nop
     Execute Command        sysbus WriteDoubleWord 0x8 0x500e7   # 0x0008: jalr a0
@@ -37,10 +36,10 @@ Overwrite With Nops As Guest
     [Arguments]            ${addr}  ${count}
     ${ptr}=                Set Variable  0x2000
     ${tmp_ptr}=            Set Variable  ${ptr}
-    ${prev_a0_value}=      Execute Command  sysbus.cpu GetRegisterUnsafe ${a0}
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a0} ${ptr}
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a2} 0x13
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a3} ${addr}
+    ${prev_a0_value}=      Execute Command  sysbus.cpu GetRegister ${a0}
+    Execute Command        sysbus.cpu SetRegister ${a0} ${ptr}
+    Execute Command        sysbus.cpu SetRegister ${a2} 0x13
+    Execute Command        sysbus.cpu SetRegister ${a3} ${addr}
 
     # Write instructions overwriting requested range
     FOR  ${repetition}  IN RANGE  ${count}
@@ -62,7 +61,7 @@ Overwrite With Nops As Guest
     Should Be Equal As Integers  ${insn_at_addr}  0x13
 
     # Restore significant registers
-    Execute Command     sysbus.cpu SetRegisterUnsafe ${a0} ${prev_a0_value}
+    Execute Command     sysbus.cpu SetRegister ${a0} ${prev_a0_value}
 
 Assert PC Equals
     [Arguments]            ${expected}
@@ -72,9 +71,8 @@ Assert PC Equals
 *** Test Cases ***
 Shoud Invalidate Other Page When Overwritten Using Sysbus
     Create Machine
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a0} 0x1000
+    Execute Command        sysbus.cpu SetRegister ${a0} 0x1000
 
-    Start Emulation
     Execute Command        cpu Step 3
     Assert PC Equals       0x1000
     Execute Command        cpu Step 3
@@ -87,9 +85,8 @@ Shoud Invalidate Other Page When Overwritten Using Sysbus
 
 Shoud Invalidate The Same Page When Overwritten Using Sysbus
     Create Machine
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a0} 0x10
+    Execute Command        sysbus.cpu SetRegister ${a0} 0x10
 
-    Start Emulation
     Execute Command        cpu Step 3
     Assert PC Equals       0x10
     Execute Command        cpu Step 3
@@ -102,9 +99,8 @@ Shoud Invalidate The Same Page When Overwritten Using Sysbus
 
 Should Invalidate Other Page When Overwritten By Guest
     Create Machine
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a0} 0x1000
+    Execute Command        sysbus.cpu SetRegister ${a0} 0x1000
 
-    Start Emulation
     Execute Command        cpu Step 3
     Assert PC Equals       0x1000
     Execute Command        cpu Step 3
@@ -117,9 +113,8 @@ Should Invalidate Other Page When Overwritten By Guest
 
 Should Invalidate The Same Page When Overwritten By Guest
     Create Machine
-    Execute Command        sysbus.cpu SetRegisterUnsafe ${a0} 0x10
+    Execute Command        sysbus.cpu SetRegister ${a0} 0x10
 
-    Start Emulation
     Execute Command        cpu Step 3
     Assert PC Equals       0x10
     Execute Command        cpu Step 3

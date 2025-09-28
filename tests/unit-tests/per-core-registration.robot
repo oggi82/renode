@@ -9,14 +9,24 @@ ${UART_ADDR_MOVED}                       0x60230000
 ${URI}                                   @https://dl.antmicro.com/projects/renode
 ${TEST_ELF}                              ${URI}/multibus_test.elf-s_3718712-8ec6b7305242b1bfce702459d75ea02d04f00360
 
-${CONFLICTING_MEMORY}=     SEPARATOR=
+${CPU1_OVERLAY_MEMORY}=     SEPARATOR=
 ...  """                                                                             ${\n}
-...  shadow_mem: Memory.ArrayMemory @ sysbus new Bus.BusPointRegistration {          ${\n}
+...  cpu1_mem: Memory.ArrayMemory @ sysbus new Bus.BusPointRegistration {            ${\n}
 ...  ${SPACE*4}address: 0x0;                                                         ${\n}
 ...  ${SPACE*4}cpu: cpu1                                                             ${\n}
 ...  }                                                                               ${\n}
 ...  ${SPACE*4}size: 0x1000                                                          ${\n}
 ...  """
+
+${CPU1_SHADOW_MEMORY}=     SEPARATOR=
+...  """                                                                             ${\n}
+...  cpu1_shadow_mem: Memory.ArrayMemory @ sysbus new Bus.BusPointRegistration {     ${\n}
+...  ${SPACE*4}address: 0xF00;                                                       ${\n}
+...  ${SPACE*4}cpu: cpu1                                                             ${\n}
+...  }                                                                               ${\n}
+...  ${SPACE*4}size: 0x1000                                                          ${\n}
+...  """
+
 
 *** Keywords ***
 Create Machine
@@ -28,7 +38,7 @@ Create Machine
     Execute Command                      macro reset "sysbus LoadELF ${elf}"
     Execute Command                      runMacro $reset
 
-    Create Terminal Tester               ${UART}
+    Create Terminal Tester               ${UART}  timeout=1
 
 
 Create Machine With Hex File
@@ -39,19 +49,34 @@ Create Machine With Hex File
 
     Execute Command                      sysbus LoadHEX @https://dl.antmicro.com/projects/renode/stm32f072b_disco--zephyr-hello_world.hex-s_34851-4e97c68491cf652d0becd549526cd3df56e8ae66 ${cpu}
 
+ Add Peripheral Move Hook
+    [Arguments]                          ${cpu}  ${hook_addr}  ${peripheral_addr}  ${new_address}
+    ${hook_script}=                      Catenate  SEPARATOR=\n
+                                         ...  from Antmicro.Renode.Peripherals.Bus import BusRangeRegistration
+                                         ...  uart_peripheral = machine.SystemBus.WhatIsAt(${peripheral_addr}, cpu).Peripheral
+                                         ...  new_registration = BusRangeRegistration(${new_address}, uart_peripheral.Size)
+                                         ...  machine.SystemBus.MoveRegistrationWithinContext(uart_peripheral, new_registration, cpu)
+    Execute Command                      ${cpu} AddHook ${hook_addr} """${hook_script}"""
+
 
 *** Test Cases ***
 Fail On Shadowing Other Registration
+           # Create machine with `ram` at 0x0 - 0x1FFFFFF.
            Create Machine                ${TEST_ELF}
 
+           # Adding a CPU-specific peripheral over a global one is OK, accesses from that CPU will reach it instead.
+           Execute Command               machine LoadPlatformDescriptionFromString ${CPU1_OVERLAY_MEMORY}
+
+  # Adding another CPU-specific peripheral at address space already occupied for the given CPU should fail though.
   ${out}=  Run Keyword And Expect Error  KeywordException:*
            ...                           Execute Command
-           ...                           machine LoadPlatformDescriptionFromString ${CONFLICTING_MEMORY}
+           ...                           machine LoadPlatformDescriptionFromString ${CPU1_SHADOW_MEMORY}
            Should Contain                ${out}     Error E39: Exception was thrown during registration
            Should Contain                ${out}     conflicts with address
 
   ${per}=  Execute Command               peripherals
-           Should Not Contain            ${per}     shadow_mem
+           Should Contain                ${per}     cpu1_mem
+           Should Not Contain            ${per}     cpu1_shadow_mem
 
 Get Same Read From Common Memory
            Create Machine                ${TEST_ELF}
@@ -124,7 +149,6 @@ Disassemble Code From Per Core Memory
 
   ${out}=  Execute Command               sysbus.cpu2 DisassembleBlock ${PER_CORE_MEMORY} 2
            Should Contain                ${out}    lw
-
 Should Move Peripheral Registered Per Core
            Create Machine                ${TEST_ELF}
 
@@ -138,7 +162,9 @@ Should Move Peripheral Registered Per Core
   ${out}=  Execute Command               sysbus WhatIsAt ${UART_ADDR_MOVED} sysbus.cpu2
            Should Be Empty               ${out}
 
-           Execute Command               sysbus.cpu2 AddHook `sysbus GetSymbolAddress "thread_entry"` "machine.SystemBus.MoveRegistrationWithinContext(machine.SystemBus.WhatIsAt(${UART_ADDR}, cpu).Peripheral, ${UART_ADDR_MOVED}, cpu)"
+           Add Peripheral Move Hook      sysbus.cpu2  `sysbus GetSymbolAddress "thread_entry"`  ${UART_ADDR}  ${UART_ADDR_MOVED}
+
+           Execute Command       showAnalyzer sysbus.uart
            Execute Command               start
 
            Wait For Line On Uart         Core 0 read from ${PER_CORE_MEMORY} returned: 0xB0B0B0B0
@@ -149,7 +175,8 @@ Should Move Peripheral Registered Per Core
 
            Execute Command               pause
            Execute Command               sysbus.cpu2 RemoveHooksAt `sysbus GetSymbolAddress "thread_entry"`
-           Execute Command               sysbus.cpu2 AddHook `sysbus GetSymbolAddress "thread_entry"` "machine.SystemBus.MoveRegistrationWithinContext(machine.SystemBus.WhatIsAt(${UART_ADDR_MOVED}, cpu).Peripheral, ${UART_ADDR}, cpu)"
+
+           Add Peripheral Move Hook      sysbus.cpu2  `sysbus GetSymbolAddress "thread_entry"`  ${UART_ADDR_MOVED}  ${UART_ADDR}
 
            Clear Terminal Tester Report
            Execute Command               runMacro $reset
@@ -180,3 +207,4 @@ Should Load Hex To Core Specific Memory
            Create Log Tester             0    # no need for additional timeout, we're only testing synchronous operations
            Create Machine With Hex File  sysbus.cpu2
            Should Not Be In Log          Tried to access bytes at non-existing peripheral
+

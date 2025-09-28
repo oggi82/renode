@@ -1,18 +1,19 @@
 //
-// Copyright (c) 2010-2022 Antmicro
+// Copyright (c) 2010-2025 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
-using Xwt;
-using Antmicro.Renode.Peripherals.UART;
-using AntShell.Terminal;
-using Antmicro.Renode.Utilities;
-using Antmicro.Renode.Logging;
-using TermSharp;
 using System.Collections.Generic;
+
+using Antmicro.Renode.Logging;
+using Antmicro.Renode.Utilities;
+
+using TermSharp;
 using TermSharp.Rows;
+
+using Xwt;
 using Xwt.Drawing;
 
 namespace Antmicro.Renode.UI
@@ -128,6 +129,26 @@ namespace Antmicro.Renode.UI
             Content = terminal;
         }
 
+        public void Close()
+        {
+            base.Dispose(true);
+
+            if(IOSource != null)
+            {
+                IOSource.Dispose();
+                IOSource = null;
+            }
+            foreach(var menuItem in terminal.ContextMenu.Items)
+            {
+                if(menuItemsDelegates.TryGetValue(menuItem, out var handler))
+                {
+                    menuItem.Clicked -= handler;
+                }
+            }
+            menuItemsDelegates.Clear();
+            terminal.Close();
+        }
+
         public void Clear()
         {
             terminal.Clear();
@@ -145,20 +166,10 @@ namespace Antmicro.Renode.UI
             {
                 terminal.Initialized += value;
             }
+
             remove
             {
                 terminal.Initialized -= value;
-            }
-        }
-
-        public void Close()
-        {
-            base.Dispose(true);
-
-            if(IOSource != null)
-            {
-                IOSource.Dispose();
-                IOSource = null;
             }
         }
 
@@ -181,26 +192,29 @@ namespace Antmicro.Renode.UI
             var popup = new Menu();
 
             var copyItem = new MenuItem("Copy");
-            copyItem.Clicked += delegate
+            menuItemsDelegates[copyItem] = delegate
             {
                 CopyMarkedField();
             };
+            copyItem.Clicked += menuItemsDelegates[copyItem];
             popup.Items.Add(copyItem);
 
             var pasteItem = new MenuItem("Paste");
-            pasteItem.Clicked += delegate
+            menuItemsDelegates[pasteItem] = delegate
             {
                 PasteMarkedField();
             };
+            pasteItem.Clicked += menuItemsDelegates[pasteItem];
             popup.Items.Add(pasteItem);
 
             var lineEndingsItem = new MenuItem(lineEndingsDictionary[!modifyLineEndings]);
-            lineEndingsItem.Clicked += delegate
+            menuItemsDelegates[lineEndingsItem] = delegate
             {
                 modifyLineEndings = !modifyLineEndings;
                 lineEndingsItem.Label = lineEndingsDictionary[!modifyLineEndings];
                 ConfigurationManager.Instance.Set("termsharp", "append-CR-to-LF", modifyLineEndings);
             };
+            lineEndingsItem.Clicked += menuItemsDelegates[lineEndingsItem];
             popup.Items.Add(lineEndingsItem);
 
             return popup;
@@ -211,16 +225,19 @@ namespace Antmicro.Renode.UI
             return new KeyEventArgs(key, modifierKeys, false, 0);
         }
 
-        private Dictionary<bool, string> lineEndingsDictionary = new Dictionary<bool, string>
+        private bool modifyLineEndings;
+
+        private readonly Dictionary<bool, string> lineEndingsDictionary = new Dictionary<bool, string>
         {
             {true, "Append '\\r' to line ending"},
             {false, "Do not append '\\r' to line ending"}
         };
 
-        private bool modifyLineEndings;
-        private bool isMonitorWindow;
-        private double defaultFontSize;
-        private Terminal terminal;
+        private readonly bool isMonitorWindow;
+        private readonly double defaultFontSize;
+        private readonly Terminal terminal;
+
+        private readonly Dictionary<MenuItem, EventHandler> menuItemsDelegates = new Dictionary<MenuItem, EventHandler>();
         private const int MinimalBottomMargin = 2;
 
 #if PLATFORM_LINUX

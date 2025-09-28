@@ -2,8 +2,8 @@
 set -e
 set -u
 
-# this is to support running Renode from external directory
-ROOT_PATH="$(cd $(dirname $0); echo $PWD)"
+# this is to support running Renode from an external directory and via a symlink
+ROOT_PATH="$(cd $(dirname $(readlink -f $0 2>/dev/null || echo $0)); echo $PWD)"
 
 . "$ROOT_PATH/tools/common.sh"
 
@@ -29,7 +29,7 @@ do
         QUIET=true
         ;;
     --net)
-        NET=true
+        echo "'--net' flag is required only for building and is not used by launcher"
         ;;
     --trace)
         TRACE=true
@@ -60,21 +60,20 @@ do
     shift
 done
 
+BUILD_TYPE_FILE="$OUTPUT_PATH/$TARGET/build_type"
+
+if [[ -f "$BUILD_TYPE_FILE" ]]
+then
+    if [[ "$(cat "$BUILD_TYPE_FILE")" == "dotnet" ]]
+    then
+        NET=true
+    fi
+fi
+
 if ! $NET && $TRACE
 then
     echo "Tracing is available only on the dotnet target"
     exit 1
-fi
-
-if [ "$TARGET" == "Release" ] && $TRACE
-then
-    echo "Tracing is available only with the debug target"
-    exit 1
-fi
-
-if $ON_WINDOWS && $TRACE
-then
-    echo "Tracing is not available on the Windows platform"
 fi
 
 if ! $ON_WINDOWS && ! $NET
@@ -95,20 +94,15 @@ fi
 
 if $NET
 then
-    if $ON_WINDOWS
+    export DOTNET_CLI_TELEMETRY_OPTOUT=1
+    if ! $TRACE
     then
-        TFM="net6.0-windows10.0.17763.0"
-        "${OUTPUT_PATH}/${TARGET}/${TFM}/Renode.exe" "${PARAMS[@]:-}"
+        TRACE_COMMAND=""
     else
-        if ! $TRACE
-        then
-            TRACE_COMMAND=""
-        else
-            TRACE_COMMAND="dotnet-trace collect --format ${TRACE_FORMAT} --"
-        fi
-        TFM="net6.0"
-        ${TRACE_COMMAND} dotnet "${OUTPUT_PATH}/${TARGET}/${TFM}/Renode.dll" "${PARAMS[@]:-}"
+        TRACE_COMMAND="dotnet-trace collect --format ${TRACE_FORMAT} --"
     fi
+
+    ${TRACE_COMMAND} dotnet "${OUTPUT_PATH}/${TARGET}/Renode.dll" "${PARAMS[@]:-}"
 else
     if $ON_WINDOWS
     then

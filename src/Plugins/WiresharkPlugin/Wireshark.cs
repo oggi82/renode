@@ -1,17 +1,18 @@
 //
-// Copyright (c) 2010-2022 Antmicro
+// Copyright (c) 2010-2024 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using Antmicro.Renode.Peripherals.Wireless;
+using System.Linq;
+
 using Antmicro.Renode.Core;
+using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Peripherals;
 using Antmicro.Renode.Peripherals.Network;
-using Antmicro.Renode.Exceptions;
+using Antmicro.Renode.Peripherals.Wireless;
 using Antmicro.Renode.Tools.Network;
 
 namespace Antmicro.Renode.Plugins.WiresharkPlugin
@@ -82,9 +83,8 @@ namespace Antmicro.Renode.Plugins.WiresharkPlugin
                 {
                     return true;
                 }
-
             }
-            
+
             throw new RecoverableException($"Cannot log {typeOfInterface.Name} traffic to {layer}-configured Wireshark.");
         }
 
@@ -254,20 +254,22 @@ namespace Antmicro.Renode.Plugins.WiresharkPlugin
             }
         }
 
+        private readonly WiresharkSender wiresharkSender;
+        private readonly string wiresharkSinkName;
+        private readonly Dictionary<IExternal, List<INetworkInterface>> observedInterfaces = new Dictionary<IExternal, List<INetworkInterface>>();
+        private readonly HashSet<IExternal> observedMedium = new HashSet<IExternal>();
+        private readonly LinkLayer layer;
+        private readonly Emulation currentEmulation;
+
         private readonly object innerLock = new object();
         private readonly BLESniffer bleSniffer;
-        private WiresharkSender wiresharkSender;
-        private string wiresharkSinkName;
-        private Dictionary<IExternal, List<INetworkInterface>> observedInterfaces = new Dictionary<IExternal, List<INetworkInterface>>();
-        private HashSet<IExternal> observedMedium = new HashSet<IExternal>();
-        private LinkLayer layer;
-        private Emulation currentEmulation;
 
         private readonly Dictionary<LinkLayer, Type> linkLayerToMedium = new Dictionary<LinkLayer, Type>
         {
             {LinkLayer.Ethernet, typeof(Switch)},
-            {LinkLayer.IEEE802_15_4, typeof(IEEE802_15_4Medium)}, 
+            {LinkLayer.IEEE802_15_4, typeof(IEEE802_15_4Medium)},
             {LinkLayer.Bluetooth_LE, typeof(BLEMedium)},
+            {LinkLayer.CAN, typeof(CANHub)},
         };
     }
 }

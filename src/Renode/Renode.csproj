@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -10,13 +10,13 @@
     <StartupObject>Antmicro.Renode.Program</StartupObject>
     <RootNamespace>Antmicro.Renode</RootNamespace>
     <AssemblyName>Renode</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <PropertiesLocation>..\..\output\properties.csproj</PropertiesLocation>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <Import Project="$(PropertiesLocation)" />
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <LangVersion>7</LangVersion>
+    <LangVersion>7.2</LangVersion>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -28,7 +28,7 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <LangVersion>7</LangVersion>
+    <LangVersion>7.2</LangVersion>
     <DebugType>full</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>..\..\output\bin\Release</OutputPath>
@@ -49,6 +49,12 @@
     <Reference Include="CookComputing.XmlRpcV2">
       <HintPath>..\..\lib\resources\libraries\CookComputing.XmlRpcV2.dll</HintPath>
     </Reference>
+    <Reference Include="NetMQ">
+      <HintPath>..\..\lib\resources\libraries\NetMQ.dll</HintPath>
+    </Reference>
+    <Reference Include="AsyncIO">
+      <HintPath>..\..\lib\resources\libraries\AsyncIO.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -57,13 +63,14 @@
     <Compile Include="PlatformDescription\ConversionResultType.cs" />
     <Compile Include="PlatformDescription\CreationDriver.cs" />
     <Compile Include="PlatformDescription\DeclarationPlace.cs" />
-    <Compile Include="PlatformDescription\FakeInitHandler.cs" />
-    <Compile Include="PlatformDescription\IInitHandler.cs" />
+    <Compile Include="PlatformDescription\FakeScriptHandler.cs" />
+    <Compile Include="PlatformDescription\IScriptHandler.cs" />
     <Compile Include="PlatformDescription\IUsingResolver.cs" />
     <Compile Include="PlatformDescription\ParsingError.cs" />
     <Compile Include="PlatformDescription\ParsingException.cs" />
     <Compile Include="PlatformDescription\PreLexer.cs" />
     <Compile Include="PlatformDescription\SerializationProvider.cs" />
+    <Compile Include="PlatformDescription\UsingsGraph.cs" />
     <Compile Include="PlatformDescription\Variable.cs" />
     <Compile Include="PlatformDescription\VariableStore.cs" />
     <Compile Include="PlatformDescription\Syntax\Attribute.cs" />
@@ -73,7 +80,7 @@
     <Compile Include="PlatformDescription\Syntax\Entry.cs" />
     <Compile Include="PlatformDescription\Syntax\EnumValue.cs" />
     <Compile Include="PlatformDescription\Syntax\Grammar.cs" />
-    <Compile Include="PlatformDescription\Syntax\IInitable.cs" />
+    <Compile Include="PlatformDescription\Syntax\IScriptable.cs" />
     <Compile Include="PlatformDescription\Syntax\InitAttribute.cs" />
     <Compile Include="PlatformDescription\Syntax\IPrefixable.cs" />
     <Compile Include="PlatformDescription\Syntax\IrqReceiver.cs" />
@@ -81,11 +88,13 @@
     <Compile Include="PlatformDescription\Syntax\ISimplestValue.cs" />
     <Compile Include="PlatformDescription\Syntax\IVisitable.cs" />
     <Compile Include="PlatformDescription\Syntax\IWithPosition.cs" />
+    <Compile Include="PlatformDescription\Syntax\ListValue.cs" />
     <Compile Include="PlatformDescription\Syntax\NumericalValue.cs" />
     <Compile Include="PlatformDescription\Syntax\ObjectValue.cs" />
     <Compile Include="PlatformDescription\Syntax\RangeValue.cs" />
     <Compile Include="PlatformDescription\Syntax\ReferenceValue.cs" />
     <Compile Include="PlatformDescription\Syntax\RegistrationInfo.cs" />
+    <Compile Include="PlatformDescription\Syntax\ResetAttribute.cs" />
     <Compile Include="PlatformDescription\Syntax\SingleOrMultiIrqEnd.cs" />
     <Compile Include="PlatformDescription\Syntax\StringValue.cs" />
     <Compile Include="PlatformDescription\Syntax\StringWithPosition.cs" />
@@ -113,7 +122,12 @@
     <Compile Include="Network\RangeLossMediumFunction.cs" />
     <Compile Include="Network\RangeMediumFunction.cs" />
     <Compile Include="Backends\Terminals\UartPtyTerminal.cs" />
-    <Compile Include="PlatformDescription\UserInterface\MonitorInitHandler.cs" />
+    <Compile Include="Plugins\ZephyrMode.cs" />
+    <Compile Include="Plugins\UbootMode.cs" />
+    <Compile Include="Plugins\TimeSkip.cs" />
+    <Compile Include="Plugins\OsSymbolHook.cs" />
+    <Compile Include="Plugins\OsTimeSkipHook.cs" />
+    <Compile Include="PlatformDescription\UserInterface\MonitorScriptHandler.cs" />
     <Compile Include="PlatformDescription\UserInterface\PlatformDescriptionMachineExtensions.cs" />
     <Compile Include="Connectors\GPIOConnector.cs" />
     <Compile Include="UI\TerminalWidget.cs" />
@@ -125,11 +139,20 @@
     <Compile Include="PlatformDescription\Syntax\EmptyValue.cs" />
     <Compile Include="PlatformDescription\Syntax\IrqDestinations.cs" />
     <Compile Include="PlatformDescription\Syntax\IrqAttribute.cs" />
+    <Compile Include="Network\ExternalControl\ExternalControlServer.cs" />
     <Compile Include="Network\NetworkServer\NetworkServer.cs" />
     <Compile Include="Network\NetworkServer\IServerModule.cs" />
     <Compile Include="Network\NetworkServer\Modules\TftpServerModule.cs" />
     <Compile Include="Integrations\ArduinoLoader.cs" />
     <Compile Include="Integrations\AsciinemaRecorder.cs" />
+    <Compile Include="Network\ExternalControl\ICommand.cs" />
+    <Compile Include="Network\ExternalControl\Response.cs" />
+    <Compile Include="Network\ExternalControl\RunFor.cs" />
+    <Compile Include="Network\ExternalControl\GetTime.cs" />
+    <Compile Include="Network\ExternalControl\IInstanceBasedCommand.cs" />
+    <Compile Include="Network\ExternalControl\GetMachine.cs" />
+    <Compile Include="Network\ExternalControl\ADC.cs" />
+    <Compile Include="Network\ExternalControl\GPIOPort.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
@@ -147,14 +170,6 @@
     </MonoDevelop>
   </ProjectExtensions>
   <ItemGroup>
-    <ProjectReference Include="..\Infrastructure\src\UI\UI.csproj">
-      <Project>{AEFE490F-85AC-42AF-9CAE-2B7FC7167E0E}</Project>
-      <Name>UI</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Main\Emulator.csproj">
-      <Project>{2901AECB-A54F-4FD8-9AC1-033D86DC7257}</Project>
-      <Name>Emulator</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\lib\AntShell\AntShell\AntShell.csproj">
       <Project>{0A473566-F4C6-455E-A56E-B3963FBABDFF}</Project>
       <Name>AntShell</Name>
@@ -162,10 +177,6 @@
     <ProjectReference Include="..\..\lib\Migrant\Migrant\Migrant.csproj">
       <Project>{5F87C357-09FB-4F53-BE37-41FE5BD88957}</Project>
       <Name>Migrant</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Extensions\Extensions.csproj">
-      <Project>{4C636FAF-4650-4088-8EA8-2FCCC225E9CF}</Project>
-      <Name>Extensions</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\lib\options-parser\OptionsParser.csproj">
       <Project>{C56AABEF-C01E-493F-A65F-09A572FE9B2E}</Project>
@@ -187,42 +198,6 @@
       <Project>{25FAECC1-55F0-4608-88BD-4207A7F993B0}</Project>
       <Name>TermSharp</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-arm.csproj">
-      <Project>{13222124-707C-5EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-arm</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-arm-m.csproj">
-      <Project>{43222114-707C-4EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-arm-m</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-i386.csproj">
-      <Project>{53222114-707C-4EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-i386</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-ppc.csproj">
-      <Project>{23222114-707C-4EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-ppc</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-ppc64.csproj">
-      <Project>{44422114-707C-4EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-ppc64</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-sparc.csproj">
-      <Project>{13222114-707C-4EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-sparc</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-riscv.csproj">
-      <Project>{63222124-707C-5EFD-8289-2728351FB7E9}</Project>
-      <Name>cores-riscv</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Peripherals\Peripherals.csproj">
-      <Project>{66400796-0C5B-4386-A859-50A2AC3F3DB7}</Project>
-      <Name>Peripherals</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Plugins\AdvancedLoggerViewerPlugin\AdvancedLoggerViewerPlugin.csproj" Condition=" $(GUI_DISABLED) != 'true' ">
-      <Project>{0D9CF6E9-AFB0-4558-8DA5-24FDBAF856F0}</Project>
-      <Name>AdvancedLoggerViewerPlugin</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Infrastructure\src\Plugins\SampleCommandPlugin\SampleCommandPlugin.csproj">
       <Project>{66A5675A-13AE-4454-88A6-29EB2D6F5988}</Project>
       <Name>SampleCommandPlugin</Name>
@@ -231,17 +206,17 @@
       <Project>{887C6088-F483-466A-A671-06EEC42B8DC1}</Project>
       <Name>TracePlugin</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Plugins\SystemCPlugin\SystemCPlugin.csproj">
+      <Project>{8882BDAF-FE52-4A39-B1F2-84C3F061D5A7}</Project>
+      <Name>SystemCPlugin</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Plugins\WiresharkPlugin\WiresharkPlugin.csproj">
       <Project>{66A9995A-13AE-4454-88A6-29EB2D6F5988}</Project>
       <Name>WiresharkPlugin</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Plugins\VerilatorPlugin\VerilatorPlugin.csproj">
+    <ProjectReference Include="..\Plugins\CoSimulationPlugin\CoSimulationPlugin.csproj">
       <Project>{45A27C6A-1831-4E0D-84C2-FB3893E7FBE5}</Project>
-      <Name>VerilatorPlugin</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-riscv64.csproj">
-      <Project>{BB222124-707C-5EFD-8289-2728351FB7AA}</Project>
-      <Name>cores-riscv64</Name>
+      <Name>CoSimulationPlugin</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\lib\InpliTftpServer\libtftp\libtftp_alt.csproj">
       <Project>{1B320B7A-BAB5-4370-9ABE-3BDAD4392BDD}</Project>
@@ -251,13 +226,13 @@
       <Project>{55ABBA4C-AAF9-4726-A592-0C92436CEC92}</Project>
       <Name>PacketDotNet</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-xtensa.csproj">
-      <Project>{28F22125-F07D-5EF2-8289-4998351FBAA4}</Project>
-      <Name>cores-xtensa</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Infrastructure\src\Emulator\Cores\cores-arm64.csproj">
+    <ProjectReference Include="..\Infrastructure\src\Infrastructure.csproj">
       <Project>{D3F10ED0-2A3F-45D5-8524-0D562905778B}</Project>
-      <Name>cores-arm64</Name>
+      <Name>Infrastructure</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\lib\ELFSharp\ELFSharp\ELFSharp.csproj">
+      <Project>{CF944E09-7C14-433C-A185-161848E989B3}</Project>
+      <Name>ELFSharp</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

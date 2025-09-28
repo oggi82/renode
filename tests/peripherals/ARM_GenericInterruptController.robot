@@ -22,9 +22,6 @@ ${MULTICORE_ZYNQ_7000}=     SEPARATOR=
 ...  ${SPACE*4}-> gic#1@29                                      ${\n}
 ...  ${SPACE*4}frequency: 667000000                             ${\n}
 ...                                                             ${\n}
-...  gic:                                                       ${\n}
-...  ${SPACE*4}\[2-3\] -> cpu1@\[0-1\]                          ${\n}
-...                                                             ${\n}
 ...  slcr:                                                      ${\n}
 ...  ${SPACE*4}cpu1: cpu1                                       ${\n}
 ...  """
@@ -41,19 +38,18 @@ Create Machine
     Execute Command                 ttc1 Frequency 33333333
 
     # Setup CPUs
-    Execute Command                 cpu SetRegisterUnsafe 0 0x000
-    Execute Command                 cpu SetRegisterUnsafe 1 0xD32 # processor variant (cortex-a9)
-    Execute Command                 cpu SetRegisterUnsafe 2 0x100 # device tree address
+    Execute Command                 cpu SetRegister 0 0x000
+    Execute Command                 cpu SetRegister 1 0xD32 # processor variant (cortex-a9)
+    Execute Command                 cpu SetRegister 2 0x100 # device tree address
     Execute Command                 cpu1 IsHalted true
 
     Execute Command                 sysbus LoadELF @${URL}/zynq-interface-tests-vmlinux-s_14142952-ab5cd7445f31414fcbf8c79d49d737c669034ef2
     Execute Command                 sysbus LoadFdt @${URL}/zynq-interface-tests.dtb-s_11724-984776b955e46b2d8f4426552a4c1ae91d063e4b 0x100 "console=ttyPS0,115200 root=/dev/ram0 rw initrd=0x1a000000,16M" false
     Execute Command                 sysbus ZeroRange 0x1a000000 0x800000
-    Execute Command                 sysbus LoadBinary @${URL}/zynq-interface-tests-rootfs.ext2-s_16777216-a08ef98709fb96de6662ed492eb45e95eb2127b3 0x1a000000
+    Execute Command                 sysbus LoadBinary @${URL}/zynq--interface-tests-rootfs.ext2-s_16777216-191638e3b3832a81bebd21d555f67bf3a4d7882a 0x1a000000
 
 *** Test Cases ***
 Should Force Interrupt Only To Lowest Id CPU
-    [Tags]                          non_critical
     Execute Command                 emulation SetGlobalSerialExecution true
     Execute Command                 emulation SetAdvanceImmediately true
     Execute Command                 logLevel 3

@@ -1,50 +1,50 @@
 *** Variables ***
 ${URI}                              @https://dl.antmicro.com/projects/renode
 ${BIN}                              uartlite--custom_uart_demo--zephyr.elf-s_184340-129eb92404f437a466cd8700f6743b1c5b0da912
-${UARTLITE_NATIVE_LINUX}            ${URI}/libVuartlite-Linux-x86_64-6585534489.so-s_2065712-ad517d8e2b23842752ef0312a4ef91f84d760c29
-${UARTLITE_SOCKET_LINUX}            ${URI}/Vuartlite-Linux-x86_64-6585534489-s_1615536-258c6921413c4d0231a86b30779e38ebd485e44d
-${UARTLITE_NATIVE_WINDOWS}          ${URI}/libVuartlite-Windows-x86_64-6585534489.dll-s_3120162-a9f05d5b5c8c4a28dbb5a7dea4cb568287c2cf5a
-${UARTLITE_SOCKET_WINDOWS}          ${URI}/Vuartlite-Windows-x86_64-6585534489.exe-s_3111169-de391155b540aa0f35986c1bf98c3504b8e87ee5
-${UARTLITE_NATIVE_MACOS}            ${URI}/libVuartlite-macOS-x86_64-6585534489.dylib-s_216728-0ac50938c9b43c97f133372ffe3842a28a047dcb
-${UARTLITE_SOCKET_MACOS}            ${URI}/Vuartlite-macOS-x86_64-6585534489-s_217568-53c098deb3bb84f0fc614448f514754a2069fd67
-${UARTLITE_WRONG_PORTS_LINUX}       ${URI}/Vuartlite_wrong_ports-Linux-x86_64-6585534489-s_1615536-b31bc852d5c35f75a7b26fa04da2d5cb657275e7
-${UARTLITE_WRONG_PORTS_WINDOWS}     ${URI}/Vuartlite_wrong_ports-Windows-x86_64-6585534489.exe-s_3111169-54324bde16d2d6d59f77509fc8dac9d402489e65
-${UARTLITE_WRONG_PORTS_MACOS}       ${URI}/Vuartlite_wrong_ports-macOS-x86_64-6585534489-s_217568-5e35e2180a043dc077490ff1c702b64e124c6314
-${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_LINUX}  ${URI}/Vuartlite_sleep_after_1000_iters-Linux-x86_64-6585534489-s_1615576-5650af9b947560e121f07a62ca50bd8b1ce68a05
-${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_WINDOWS}  ${URI}/Vuartlite_sleep_after_1000_iters-Windows-x86_64-6585534489.exe-s_3114269-bfcb0661daa31b57c77ed3674fdee980acf487d6
-${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_MACOS}  ${URI}/Vuartlite_sleep_after_1000_iters-macOS-x86_64-6585534489-s_217608-f620f1032858cfd72a2886886e5844c3fcd623ea
-${UARTLITE_WRONG_SECOND_PORT_LINUX}  ${URI}/Vuartlite_wrong_second_port-Linux-x86_64-6585534489-s_1615536-572eff3c2886bd192a47a86969210362f3f97e04
-${UARTLITE_WRONG_SECOND_PORT_WINDOWS}  ${URI}/Vuartlite_wrong_second_port-Windows-x86_64-6585534489.exe-s_3111169-87d77ac7a42ff87038f1abaf74519b1b9db15638
-${UARTLITE_WRONG_SECOND_PORT_MACOS}  ${URI}/Vuartlite_wrong_second_port-macOS-x86_64-6585534489-s_217568-db79061d6a865807f5bb569fa9879384e2d717f4
+${UARTLITE_NATIVE_LINUX}            ${URI}/libVuartlite-Linux-x86_64-12904733885.so-s_2087832-2d689c6c42723282e927d1b21140476d001b9db9
+${UARTLITE_NATIVE_WINDOWS}          ${URI}/libVuartlite-Windows-x86_64-12904733885.dll-s_3250805-26fbac48b0f6e366e6d2efd53bcafe899cfe3bed
+${UARTLITE_NATIVE_MACOS}            ${URI}/libVuartlite-macOS-x86_64-12904733885.dylib-s_222512-aa60e4266c82f43805fc2bd4c023daa3f666fdf0
+${UARTLITE_SOCKET_LINUX}            ${URI}/Vuartlite-Linux-x86_64-12904733885-s_1634440-1fca77dcce5b8d477afe39d588e2b15d58408faf
+${UARTLITE_SOCKET_WINDOWS}          ${URI}/Vuartlite-Windows-x86_64-12904733885.exe-s_3244916-368deeb3e38ff16907f89f71142a26c245f6ee41
+${UARTLITE_SOCKET_MACOS}            ${URI}/Vuartlite-macOS-x86_64-12904733885-s_222576-005efcfa289330c23a3eb67058ef1d204d901f63
+${UARTLITE_WRONG_PORTS_LINUX}       ${URI}/Vuartlite_wrong_ports-Linux-x86_64-12904733885-s_1634440-4fbae470afd67def8c5561afcd3981155b34bebf
+${UARTLITE_WRONG_PORTS_WINDOWS}     ${URI}/Vuartlite_wrong_ports-Windows-x86_64-12904733885.exe-s_3244916-911bee45eb4e21227ccd1c2581f5d77ae96eaf56
+${UARTLITE_WRONG_PORTS_MACOS}       ${URI}/Vuartlite_wrong_ports-macOS-x86_64-12904733885-s_222576-7f0a02b68b87328b836291dd3afb21c6fa17d3e1
+${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_LINUX}  ${URI}/Vuartlite_sleep_after_1000_iters-Linux-x86_64-12904733885-s_1634488-1f4f250dd973f0f5e67c4b2e222856acdf011781
+${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_WINDOWS}  ${URI}/Vuartlite_sleep_after_1000_iters-Windows-x86_64-12904733885.exe-s_3245968-4d0307f72d0293defa20516ad60517a307421d25
+${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_MACOS}  ${URI}/Vuartlite_sleep_after_1000_iters-macOS-x86_64-12904733885-s_222616-590a3b5a44836bb8a6e7b27d53e677ce7f406fd0
+${UARTLITE_WRONG_SECOND_PORT_LINUX}  ${URI}/Vuartlite_wrong_second_port-Linux-x86_64-12904733885-s_1634440-9555b3643f1399aac5278c72404b97dbea14e250
+${UARTLITE_WRONG_SECOND_PORT_WINDOWS}  ${URI}/Vuartlite_wrong_second_port-Windows-x86_64-12904733885.exe-s_3244916-c2d450fff739bbb6ba43d56a42f1f444733a9dc6
+${UARTLITE_WRONG_SECOND_PORT_MACOS}  ${URI}/Vuartlite_wrong_second_port-macOS-x86_64-12904733885-s_222576-fa829c3e617c9506c178ef4d2c5388b1cd9fc2d1
 ${LOCAL_FILENAME}                   uartlite
 ${UART}                             sysbus.uart
 ${UARTLITE_SCRIPT}                  scripts/single-node/riscv_verilated_uartlite.resc
 ${LOG_TIMEOUT}                      1  # virtual seconds
 
 # same as riscv_verilated_uartlite.repl, but adds address for uart
-${PLATFORM}=     SEPARATOR=
-...  """                                                                        ${\n}
-...  cpu: CPU.RiscV32 @ sysbus                                                  ${\n}
-...  ${SPACE*4}cpuType: "rv32g"                                                 ${\n}
-...  ${SPACE*4}privilegeArchitecture: PrivilegeArchitecture.Priv1_09            ${\n}
-...  ${SPACE*4}timeProvider: clint                                              ${\n}
-...                                                                             ${\n}
-...  plic: IRQControllers.PlatformLevelInterruptController @ sysbus 0x40000000  ${\n}
-...  ${SPACE*4}0 -> cpu@11                                                      ${\n}
-...  ${SPACE*4}numberOfSources: 31                                              ${\n}
-...  ${SPACE*4}numberOfContexts: 1                                              ${\n}
-...  ${SPACE*4}prioritiesEnabled : false                                        ${\n}
-...                                                                             ${\n}
-...  clint: IRQControllers.CoreLevelInterruptor  @ sysbus 0x44000000            ${\n}
-...  ${SPACE*4}frequency: 66000000                                              ${\n}
-...  ${SPACE*4}\[0, 1\] -> cpu@\[3, 7\]                                         ${\n}
-...                                                                             ${\n}
-...  ram: Memory.MappedMemory @ sysbus 0x60000000                               ${\n}
-...  ${SPACE*4}size: 0x06400000                                                 ${\n}
-...                                                                             ${\n}
-...  uart: Verilated.VerilatedUART @ sysbus <0x70000000, +0x100>                ${\n}
-...  ${SPACE*4}frequency: 100000000                                             ${\n}
-...  ${SPACE*4}address: "127.0.0.1"                                             ${\n}
+${PLATFORM}=     SEPARATOR=${\n}
+...  """
+...  cpu: CPU.RiscV32 @ sysbus
+...  ${SPACE*4}cpuType: "rv32g"
+...  ${SPACE*4}privilegedArchitecture: PrivilegedArchitecture.Priv1_09
+...  ${SPACE*4}timeProvider: clint
+...
+...  plic: IRQControllers.PlatformLevelInterruptController @ sysbus 0x40000000
+...  ${SPACE*4}0 -> cpu@11
+...  ${SPACE*4}numberOfSources: 31
+...  ${SPACE*4}numberOfContexts: 1
+...  ${SPACE*4}prioritiesEnabled : false
+...
+...  clint: IRQControllers.CoreLevelInterruptor @ sysbus 0x44000000
+...  ${SPACE*4}frequency: 66000000
+...  ${SPACE*4}\[0, 1\] -> cpu@\[3, 7\]
+...
+...  ram: Memory.MappedMemory @ sysbus 0x60000000
+...  ${SPACE*4}size: 0x06400000
+...
+...  uart: CoSimulated.CoSimulatedUART @ sysbus <0x70000000, +0x100>
+...  ${SPACE*4}frequency: 100000000
+...  ${SPACE*4}address: "127.0.0.1"
 ...  """
 
 *** Keywords ***
@@ -61,7 +61,7 @@ Create Machine With Socket Based Communication
 
 *** Test Cases ***
 Should Run UARTLite Binary From Script
-    [Tags]                          skip_osx
+    [Tags]                          skip_osx  skip_host_arm
 
     Execute Command                 \$uartLinux?=${UARTLITE_NATIVE_LINUX}
     Execute Command                 \$uartWindows?=${UARTLITE_NATIVE_WINDOWS}
@@ -72,28 +72,30 @@ Should Run UARTLite Binary From Script
 
 # Starting emulation without SimulationFilePath(Linux|MacOS|Windows) set
 Should Handle Empty UARTLite Binary
+    [Tags]                          skip_host_arm
     Create Log Tester               ${LOG_TIMEOUT}
     Execute Command                 mach create
     Execute Command                 machine LoadPlatformDescription @platforms/cpus/verilated/riscv_verilated_uartlite.repl
     Execute Command                 showAnalyzer sysbus.uart
     Execute Command                 sysbus LoadELF ${URI}/${BIN}
     Execute Command                 sysbus.cpu PC `sysbus GetSymbolAddress "vinit"`
-    Run Keyword And Expect Error    *Cannot start emulation. Set SimulationFilePath or connect to a simulator first!*    Start Emulation
+    Wait For Log Entry              Set SimulationFilePath or connect to a simulator first!
 
 # File Doesn't Exist
 Should Handle Nonexistent UARTLite Binary
-    [Tags]                          skip_osx
+    [Tags]                          skip_osx  skip_host_arm
 
     Execute Command                 $uartLinux = @nonexistent-uart-binary
     Execute Command                 $uartWindows = @nonexistent-uart-binary
     Execute Command                 $uartMacOS = @nonexistent-uart-binary
     Create Log Tester               ${LOG_TIMEOUT}
-    Run Keyword And Expect Error    *Error starting verilated peripheral!*    Execute Script  ${UARTLITE_SCRIPT}
+    Run Keyword And Expect Error    *Error starting cosimulated peripheral!*    Execute Script  ${UARTLITE_SCRIPT}
 
 
 # Following tests use socket based communication
 
 Should Run UARTLite Binary Using Socket
+    [Tags]                          skip_host_arm
     Create Machine With Socket Based Communication  ${UARTLITE_SOCKET_LINUX}  ${UARTLITE_SOCKET_WINDOWS}  ${UARTLITE_SOCKET_MACOS}
     Create Terminal Tester          ${UART}
     Start Emulation
@@ -101,6 +103,7 @@ Should Run UARTLite Binary Using Socket
 
 # Sleep after 1000 iterations in "simulate" loop (renode.cpp)
 Should Handle Connection Timeout
+    [Tags]                          skip_host_arm
     Set Test Variable               ${uartLinux}    ${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_LINUX}
     Set Test Variable               ${uartWindows}  ${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_WINDOWS}
     Set Test Variable               ${uartMacOS}    ${UARTLITE_SLEEP_AFTER_1000_ITERS_SOCKET_MACOS}
@@ -113,30 +116,33 @@ Should Handle Connection Timeout
 
 # Both ports wrong when calling "simulate" (sim_main.cpp)
 Should Handle UARTLite Binary Not Connecting
+    [Tags]                          skip_host_arm
     Set Test Variable               ${uartLinux}    ${UARTLITE_WRONG_PORTS_LINUX}
     Set Test Variable               ${uartWindows}  ${UARTLITE_WRONG_PORTS_WINDOWS}
     Set Test Variable               ${uartMacOS}    ${UARTLITE_WRONG_PORTS_MACOS}
     Create Log Tester               ${LOG_TIMEOUT}
-    Run Keyword And Expect Error    *Connection to the verilated peripheral failed!*    Create Machine With Socket Based Communication  ${uartLinux}  ${uartWindows}  ${uartMacOS}
+    Run Keyword And Expect Error    *Connection to the cosimulated peripheral failed!*    Create Machine With Socket Based Communication  ${uartLinux}  ${uartWindows}  ${uartMacOS}
 
 # Wrong "second" port when calling "simulate" (sim_main.cpp)
 Should Handle UARTLite Binary Partly Connecting
+    [Tags]                          skip_host_arm
     Set Test Variable               ${uartLinux}    ${UARTLITE_WRONG_SECOND_PORT_LINUX}
     Set Test Variable               ${uartWindows}  ${UARTLITE_WRONG_SECOND_PORT_WINDOWS}
     Set Test Variable               ${uartMacOS}    ${UARTLITE_WRONG_SECOND_PORT_MACOS}
     Create Log Tester               ${LOG_TIMEOUT}
-    Run Keyword And Expect Error    *Connection to the verilated peripheral failed!*    Create Machine With Socket Based Communication  ${uartLinux}  ${uartWindows}  ${uartMacOS}
+    Run Keyword And Expect Error    *Connection to the cosimulated peripheral failed!*    Create Machine With Socket Based Communication  ${uartLinux}  ${uartWindows}  ${uartMacOS}
 
 # Starting emulation without SimulationFilePath(Linux|MacOS|Windows) set
 Should Handle Empty UARTLite Binary With Socket Based Communication
+    [Tags]                          skip_host_arm
     Create Log Tester               ${LOG_TIMEOUT}
     Execute Command                 mach create
     Execute Command                 machine LoadPlatformDescriptionFromString ${PLATFORM}
     Execute Command                 sysbus LoadELF ${URI}/${BIN}
     Execute Command                 sysbus.cpu PC `sysbus GetSymbolAddress "vinit"`
-    Run Keyword And Expect Error    *Cannot start emulation. Set SimulationFilePath or connect to a simulator first!*    Start Emulation
+    Wait For Log Entry              Set SimulationFilePath or connect to a simulator first!
 
 # File Doesn't Exist
 Should Handle Nonexistent UARTLite Binary With Socket Based Communication
     Create Log Tester               ${LOG_TIMEOUT}
-    Run Keyword And Expect Error    *Error starting verilated peripheral!*    Create Machine With Socket Based Communication  nonexistent-uart-binary  nonexistent-uart-binary  nonexistent-uart-binary
+    Run Keyword And Expect Error    *Error starting cosimulated peripheral!*    Create Machine With Socket Based Communication  @nonexistent-uart-binary  @nonexistent-uart-binary  @nonexistent-uart-binary
