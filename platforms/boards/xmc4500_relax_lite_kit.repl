@@ -1,0 +1,4 @@
+// Infineon XMC4500 Relax Lite Kit
+// LEDs and buttons will be added once the PORT peripheral is implemented.
+
+using "platforms/cpus/xmc4500.repl"

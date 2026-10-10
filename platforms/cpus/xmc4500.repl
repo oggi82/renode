@@ -1,0 +1,68 @@
+// Infineon XMC4500-F100x1024 (Cortex-M4F, 120 MHz, 1 MB Flash, 160 KB SRAM)
+// Memory map taken from the XMC4500 reference manual; segment layout confirmed by the linker script of the test firmware.
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4f"
+    PerformanceInMips: 120
+    nvic: nvic
+
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    priorityMask: 0xF0
+    systickFrequency: 120000000
+
+// Program flash: the same 1 MB is visible through the cached (0x0800_0000) and the uncached (0x0C00_0000) segment
+flash: Memory.MappedMemory @ {
+        sysbus 0x08000000;
+        sysbus 0x0C000000
+    }
+    size: 0x100000
+
+// PSRAM (segment 1), DSRAM1 (segment 2) and DSRAM2 (segment 3)
+psram: Memory.MappedMemory @ sysbus 0x10000000
+    size: 0x10000
+
+dsram1: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x10000
+
+dsram2: Memory.MappedMemory @ sysbus 0x30000000
+    size: 0x8000
+
+scu: Miscellaneous.XMC4XXX_SCU @ sysbus 0x50004000
+
+// Flash controller (FLASH0), only the wait state setting (FCON) is written during start-up; plain storage for now
+flashController: Memory.ArrayMemory @ sysbus 0x58002000
+    size: 0x1000
+
+// Ports P0-P6 and P14-P15; P14 and P15 have analog inputs, their pins are disabled for digital use after reset
+port0: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028000
+    numberOfPins: 16
+
+port1: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028100
+    numberOfPins: 16
+
+port2: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028200
+    numberOfPins: 16
+
+port3: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028300
+    numberOfPins: 16
+
+port4: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028400
+    numberOfPins: 16
+
+port5: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028500
+    numberOfPins: 16
+
+port6: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028600
+    numberOfPins: 16
+
+port14: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028E00
+    numberOfPins: 16
+    pinDisableResetValue: 0xFFFF
+
+port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
+    numberOfPins: 16
+    pinDisableResetValue: 0xFFFF
+
+// USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
+usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
+    [0-5] -> nvic@[84-89]

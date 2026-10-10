@@ -1,0 +1,17 @@
+:name: XMC4500 Relax Lite Kit
+:description: This script runs a user-provided ELF on the Infineon XMC4500 Relax Lite Kit.
+
+using sysbus
+$name?="XMC4500_Relax_Lite_Kit"
+mach create $name
+machine LoadPlatformDescription @platforms/boards/xmc4500_relax_lite_kit.repl
+
+showAnalyzer sysbus.usic0ch0
+
+macro reset
+"""
+    sysbus LoadELF $bin
+    cpu VectorTableOffset 0x08000000
+"""
+
+runMacro $reset
