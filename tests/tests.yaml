@@ -68,6 +68,7 @@
 - tests/platforms/xmc4500/can.robot
 - tests/platforms/xmc4500/flash.robot
 - tests/platforms/xmc4500/flash.robot
+- tests/platforms/xmc4500/vadc-dac.robot
 - tests/unit-tests/riscv-custom-instructions.robot
 - tests/unit-tests/riscv-lr-sc-instructions.robot
 - tests/metrics-analyzer/metrics-analyzer.robot
@@ -238,4 +239,3 @@
 
 - port_3338:
   - tests/unit-tests/gdb/armv8.robot
-- tests/platforms/xmc4500/vadc-dac.robot
