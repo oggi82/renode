@@ -92,3 +92,27 @@ vadc: Analog.XMC4XXX_VADC @ sysbus <0x40004000, +0x1400>
 dac: Analog.XMC4XXX_DAC @ sysbus 0x48018000
     nvic: nvic
     [0-1] -> nvic@[42-43]
+
+// Capture/Compare Units 4 (CCU40-CCU43): service request lines SR0-SR3 are NVIC interrupts 44-59, the slice outputs are connections 4-7
+ccu40: Timers.XMC4XXX_CCU4 @ sysbus 0x4000C000
+    scu: scu
+    [0-3] -> nvic@[44-47]
+
+ccu41: Timers.XMC4XXX_CCU4 @ sysbus 0x40010000
+    scu: scu
+    [0-3] -> nvic@[48-51]
+
+ccu42: Timers.XMC4XXX_CCU4 @ sysbus 0x40014000
+    scu: scu
+    [0-3] -> nvic@[52-55]
+
+ccu43: Timers.XMC4XXX_CCU4 @ sysbus 0x48004000
+    scu: scu
+    [0-3] -> nvic@[56-59]
+
+// SCU trigger signals GSC40-GSC43 (CCUCON bits 0-3) drive input I of the matching CCU4 unit
+scu:
+    0 -> ccu40@8
+    1 -> ccu41@8
+    2 -> ccu42@8
+    3 -> ccu43@8
