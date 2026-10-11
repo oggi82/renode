@@ -66,6 +66,28 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
     numberOfPins: 16
     pinDisableResetValue: 0xFFFF
 
-// USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
-usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
+// USIC channels: UART (ASC), SPI (SSC) or I2C (IIC) selected by CCR.MODE. The six service request lines
+// of a module (shared by both channels) are the NVIC interrupts 84-89 (USIC0), 90-95 (USIC1), 96-101 (USIC2)
+usic0ch0: UART.XMC4XXX_USIC @ sysbus <0x40030000, +0x200>
+    scu: scu
     [0-5] -> nvic@[84-89]
+
+usic0ch1: UART.XMC4XXX_USIC @ sysbus <0x40030200, +0x200>
+    scu: scu
+    [0-5] -> nvic@[84-89]
+
+usic1ch0: UART.XMC4XXX_USIC @ sysbus <0x48020000, +0x200>
+    scu: scu
+    [0-5] -> nvic@[90-95]
+
+usic1ch1: UART.XMC4XXX_USIC @ sysbus <0x48020200, +0x200>
+    scu: scu
+    [0-5] -> nvic@[90-95]
+
+usic2ch0: UART.XMC4XXX_USIC @ sysbus <0x48024000, +0x200>
+    scu: scu
+    [0-5] -> nvic@[96-101]
+
+usic2ch1: UART.XMC4XXX_USIC @ sysbus <0x48024200, +0x200>
+    scu: scu
+    [0-5] -> nvic@[96-101]
