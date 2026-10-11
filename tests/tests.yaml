@@ -238,3 +238,4 @@
 
 - port_3338:
   - tests/unit-tests/gdb/armv8.robot
+- tests/platforms/xmc4500/vadc-dac.robot
