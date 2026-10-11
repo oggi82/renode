@@ -1,4 +1,19 @@
 // Infineon XMC4500 Relax Lite Kit
-// LEDs and buttons will be added once the PORT peripheral is implemented.
+// LED1 is on P1.1, LED2 on P1.0, BUTTON1 on P1.14 and BUTTON2 on P1.15.
+// The LEDs and buttons are assumed to be active high (the kit documentation does not specify the polarity).
 
 using "platforms/cpus/xmc4500.repl"
+
+led1: Miscellaneous.LED @ port1 1
+
+led2: Miscellaneous.LED @ port1 0
+
+button1: Miscellaneous.Button @ port1 14
+    -> port1@14
+
+button2: Miscellaneous.Button @ port1 15
+    -> port1@15
+
+port1:
+    1 -> led1@0
+    0 -> led2@0
