@@ -81,3 +81,14 @@ can0: CAN.XMC4XXX_CAN @ sysbus 0x48014000
 // USIC1 channel 1: debug UART of the examples whose BSP uses XMC_UART1_CH1 (Flash_EEPROM); SR0-5 = NVIC 90-95
 usic1ch1: UART.XMC4XXX_UART @ sysbus <0x48020200, +0x200>
     [0-5] -> nvic@[90-95]
+
+// VADC (groups G0-G3 and common block C0): group service requests G0SR0..G3SR3 are NVIC interrupts 18-33, C0SR0..C0SR3 are 14-17
+vadc: Analog.XMC4XXX_VADC @ sysbus <0x40004000, +0x1400>
+    nvic: nvic
+    [0-15] -> nvic@[18-33]
+    [16-19] -> nvic@[14-17]
+
+// DAC with two channels; service requests 0 and 1 are NVIC interrupts 42 and 43
+dac: Analog.XMC4XXX_DAC @ sysbus 0x48018000
+    nvic: nvic
+    [0-1] -> nvic@[42-43]
