@@ -69,3 +69,27 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
     [0-5] -> nvic@[84-89]
+
+// Capture/Compare Units 4 (CCU40-CCU43): service request lines SR0-SR3 are NVIC interrupts 44-59, the slice outputs are connections 4-7
+ccu40: Timers.XMC4XXX_CCU4 @ sysbus 0x4000C000
+    scu: scu
+    [0-3] -> nvic@[44-47]
+
+ccu41: Timers.XMC4XXX_CCU4 @ sysbus 0x40010000
+    scu: scu
+    [0-3] -> nvic@[48-51]
+
+ccu42: Timers.XMC4XXX_CCU4 @ sysbus 0x40014000
+    scu: scu
+    [0-3] -> nvic@[52-55]
+
+ccu43: Timers.XMC4XXX_CCU4 @ sysbus 0x48004000
+    scu: scu
+    [0-3] -> nvic@[56-59]
+
+// SCU trigger signals GSC40-GSC43 (CCUCON bits 0-3) drive input I of the matching CCU4 unit
+scu:
+    0 -> ccu40@8
+    1 -> ccu41@8
+    2 -> ccu42@8
+    3 -> ccu43@8
