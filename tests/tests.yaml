@@ -67,7 +67,6 @@
 - tests/platforms/xmc4500/platform.robot
 - tests/platforms/xmc4500/can.robot
 - tests/platforms/xmc4500/flash.robot
-- tests/platforms/xmc4500/flash.robot
 - tests/platforms/xmc4500/vadc-dac.robot
 - tests/unit-tests/riscv-custom-instructions.robot
 - tests/unit-tests/riscv-lr-sc-instructions.robot
