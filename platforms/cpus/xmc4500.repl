@@ -11,12 +11,14 @@ nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 120000000
     IRQ -> cpu@0
 
-// Program flash: the same 1 MB is visible through the cached (0x0800_0000) and the uncached (0x0C00_0000) segment
-flash: Memory.MappedMemory @ {
-        sysbus 0x08000000;
-        sysbus 0x0C000000
-    }
+// Program flash: the same 1 MB is visible through the cached (0x0800_0000) and the uncached (0x0C00_0000) segment.
+// The cached segment is the (fast) storage; the uncached segment is a view of it whose writes are flash command cycles.
+flash: Memory.MappedMemory @ sysbus 0x08000000
     size: 0x100000
+
+flashUncached: MTD.XMC4XXX_FlashArray @ sysbus 0x0C000000
+    flash: flash
+    controller: flashController
 
 // PSRAM (segment 1), DSRAM1 (segment 2) and DSRAM2 (segment 3)
 psram: Memory.MappedMemory @ sysbus 0x10000000
@@ -32,9 +34,10 @@ scu: Miscellaneous.XMC4XXX_SCU @ sysbus 0x50004000
     nvic: nvic
     oscillatorFrequency: 12000000
 
-// Flash controller (FLASH0), only the wait state setting (FCON) is written during start-up; plain storage for now
-flashController: Memory.ArrayMemory @ sysbus 0x58002000
-    size: 0x1000
+// Flash controller FLASH0: FSR/FCON/MARP/PROCONx and the command interpreter for the writes to the uncached flash segment
+flashController: MTD.XMC4XXX_FlashController @ sysbus 0x58002000
+    flash: flash
+    IRQ -> nvic@12
 
 // Ports P0-P6 and P14-P15; P14 and P15 have analog inputs, their pins are disabled for digital use after reset
 port0: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028000
@@ -69,3 +72,7 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
     [0-5] -> nvic@[84-89]
+
+// USIC1 channel 1: debug UART of the examples whose BSP uses XMC_UART1_CH1 (Flash_EEPROM); SR0-5 = NVIC 90-95
+usic1ch1: UART.XMC4XXX_UART @ sysbus <0x48020200, +0x200>
+    [0-5] -> nvic@[90-95]
