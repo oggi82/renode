@@ -28,9 +28,24 @@ dsram1: Memory.MappedMemory @ sysbus 0x20000000
 dsram2: Memory.MappedMemory @ sysbus 0x30000000
     size: 0x8000
 
-scu: Miscellaneous.XMC4XXX_SCU @ sysbus 0x50004000
+// The SCU registers end below the ERU0 at 0x50004800; the combined service request is NVIC interrupt 0 (SCU_0)
+scu: Miscellaneous.XMC4XXX_SCU @ sysbus <0x50004000, +0x800>
     nvic: nvic
     oscillatorFrequency: 12000000
+    IRQ -> nvic@0
+
+// Window watchdog; its pre-warning alarm and reset request are inputs of the SCU (service request PRWARN, system reset)
+wdt: Timers.XMC4XXX_WDT @ sysbus 0x50008000
+    scu: scu
+    Alarm -> scu@0
+    ResetRequest -> scu@4
+
+// Real time clock of the hibernate domain; periodic and alarm events are SCU service requests (PI, AI), WakeupIRQ wakes from hibernate
+rtc: Timers.XMC4XXX_RTC @ sysbus 0x50004A00
+    scu: scu
+    PeriodicIRQ -> scu@1
+    AlarmIRQ -> scu@2
+    WakeupIRQ -> scu@5
 
 // Flash controller (FLASH0), only the wait state setting (FCON) is written during start-up; plain storage for now
 flashController: Memory.ArrayMemory @ sysbus 0x58002000
