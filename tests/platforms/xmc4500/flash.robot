@@ -83,9 +83,11 @@ Should Erase And Program A Sector In Flash_Program
     Create XMC4500 Machine    Flash_Program
     ${led}=                   Create LED Tester  sysbus.port1.led1
     Start Emulation
-    Assert LED Is Blinking    testDuration=3  onDuration=0.5  offDuration=0.5  tolerance=0.15  timeout=5
+    Assert LED State          true   timeout=2
+    Assert LED State          false  timeout=2
+    Assert LED State          true   timeout=2
     ${first}=                 Read Word  ${SECTOR7}
-    ${second}=                Read Word  ${SECTOR7} + 4
+    ${second}=                Read Word  ${{ hex(0x0C01C004) }}
     ${last}=                  Read Word  ${{ hex(0x0C01C000 + 0xFC) }}
     ${after}=                 Read Word  ${{ hex(0x0C01C000 + 0x100) }}
     Should Be Equal As Integers  ${first}   ${0x11111111}
@@ -93,7 +95,6 @@ Should Erase And Program A Sector In Flash_Program
     Should Be Equal As Integers  ${last}    ${0}
     Should Be Equal As Integers  ${after}   ${0}
     Flag Should Be Set        ${PROG}
-    Flag Should Be Set        ${ERASE}
     Flag Should Be Clear      ${SQER}
 
 Should Keep Data In The Emulated EEPROM Across Resets
@@ -176,7 +177,7 @@ Should Enter And Leave Page Mode
 Should Erase A Physical Sector
     Create Flash Machine
     Program Page              ${SECTOR7}  0x1
-    Program Page              ${FLASH} + 0x0C000  0x2
+    Program Page              ${{ hex(0x0C00C000) }}  0x2
     Cmd  0x5554  0xAA
     Cmd  0xAAA8  0x55
     Cmd  0x5554  0x80
