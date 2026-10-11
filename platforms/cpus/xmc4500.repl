@@ -11,12 +11,14 @@ nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 120000000
     IRQ -> cpu@0
 
-// Program flash: the same 1 MB is visible through the cached (0x0800_0000) and the uncached (0x0C00_0000) segment
-flash: Memory.MappedMemory @ {
-        sysbus 0x08000000;
-        sysbus 0x0C000000
-    }
+// Program flash: the same 1 MB is visible through the cached (0x0800_0000) and the uncached (0x0C00_0000) segment.
+// The cached segment is the (fast) storage; the uncached segment is a view of it whose writes are flash command cycles.
+flash: Memory.MappedMemory @ sysbus 0x08000000
     size: 0x100000
+
+flashUncached: MTD.XMC4XXX_FlashArray @ sysbus 0x0C000000
+    flash: flash
+    controller: flashController
 
 // PSRAM (segment 1), DSRAM1 (segment 2) and DSRAM2 (segment 3)
 psram: Memory.MappedMemory @ sysbus 0x10000000
@@ -47,9 +49,10 @@ rtc: Timers.XMC4XXX_RTC @ sysbus 0x50004A00
     AlarmIRQ -> scu@2
     WakeupIRQ -> scu@5
 
-// Flash controller (FLASH0), only the wait state setting (FCON) is written during start-up; plain storage for now
-flashController: Memory.ArrayMemory @ sysbus 0x58002000
-    size: 0x1000
+// Flash controller FLASH0: FSR/FCON/MARP/PROCONx and the command interpreter for the writes to the uncached flash segment
+flashController: MTD.XMC4XXX_FlashController @ sysbus 0x58002000
+    flash: flash
+    IRQ -> nvic@12
 
 // Ports P0-P6 and P14-P15; P14 and P15 have analog inputs, their pins are disabled for digital use after reset
 port0: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028000
@@ -84,3 +87,47 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
     [0-5] -> nvic@[84-89]
+
+// MultiCAN (CAN0); the eight service request lines SR0-SR7 are NVIC interrupts 76-83 (CAN0_0_IRQn ... CAN0_7_IRQn)
+can0: CAN.XMC4XXX_CAN @ sysbus 0x48014000
+    peripheralClockFrequency: 72000000
+    [0-7] -> nvic@[76-83]
+
+// USIC1 channel 1: debug UART of the examples whose BSP uses XMC_UART1_CH1 (Flash_EEPROM); SR0-5 = NVIC 90-95
+usic1ch1: UART.XMC4XXX_UART @ sysbus <0x48020200, +0x200>
+    [0-5] -> nvic@[90-95]
+
+// VADC (groups G0-G3 and common block C0): group service requests G0SR0..G3SR3 are NVIC interrupts 18-33, C0SR0..C0SR3 are 14-17
+vadc: Analog.XMC4XXX_VADC @ sysbus <0x40004000, +0x1400>
+    nvic: nvic
+    [0-15] -> nvic@[18-33]
+    [16-19] -> nvic@[14-17]
+
+// DAC with two channels; service requests 0 and 1 are NVIC interrupts 42 and 43
+dac: Analog.XMC4XXX_DAC @ sysbus 0x48018000
+    nvic: nvic
+    [0-1] -> nvic@[42-43]
+
+// Capture/Compare Units 4 (CCU40-CCU43): service request lines SR0-SR3 are NVIC interrupts 44-59, the slice outputs are connections 4-7
+ccu40: Timers.XMC4XXX_CCU4 @ sysbus 0x4000C000
+    scu: scu
+    [0-3] -> nvic@[44-47]
+
+ccu41: Timers.XMC4XXX_CCU4 @ sysbus 0x40010000
+    scu: scu
+    [0-3] -> nvic@[48-51]
+
+ccu42: Timers.XMC4XXX_CCU4 @ sysbus 0x40014000
+    scu: scu
+    [0-3] -> nvic@[52-55]
+
+ccu43: Timers.XMC4XXX_CCU4 @ sysbus 0x48004000
+    scu: scu
+    [0-3] -> nvic@[56-59]
+
+// SCU trigger signals GSC40-GSC43 (CCUCON bits 0-3) drive input I of the matching CCU4 unit
+scu:
+    0 -> ccu40@8
+    1 -> ccu41@8
+    2 -> ccu42@8
+    3 -> ccu43@8

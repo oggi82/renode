@@ -1,0 +1,5 @@
+// Test extension: LED on OUT0 (connection 4) of CCU40, stands in for the missing port alternate function wiring
+pwmLed: Miscellaneous.LED @ port2 0
+
+ccu40:
+    4 -> pwmLed@0

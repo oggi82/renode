@@ -11,4 +11,5 @@ base="$(git -C "$XMC_ROOT" rev-parse --abbrev-ref HEAD)"
 cp -a "$XMC_ROOT" "$dest"
 git -C "$dest" checkout -q -b "xmc4500-$comp" "$base"
 git -C "$dest/src/Infrastructure" checkout -q -b "xmc4500-$comp"
+"$dest/scripts/xmc4500/fix-workspace-paths.sh" "$XMC_ROOT" >/dev/null
 echo "$dest (branch xmc4500-$comp, based on $base)"
