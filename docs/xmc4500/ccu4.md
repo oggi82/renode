@@ -134,10 +134,10 @@ scripts/xmc4500/run-example.sh CCU4_Timer_Concatenation 0 "emulation RunFor '0.2
 
 ## 6. Tests
 
-Datei: `tests/platforms/xmc4500/ccu4.robot`, Start: `scripts/xmc4500/test.sh ccu4`.
+Dateien: `tests/platforms/xmc4500/ccu4.robot`, `ccu4_out0_led.repl` (Test-LED an OUT0 von CCU40), Start: `scripts/xmc4500/test.sh ccu4`.
 
 | Test-Case | Beispiel | Prüft |
 |---|---|---|
 | Should Generate 2 Hz PWM With 50 Percent Duty Cycle | `CCU4_PWM` | Ausgang OUT0 (Test-LED): 0,25 s an / 0,25 s aus; Neustart über SCU-GSC40 im Interrupt |
 | Should Toggle LED Once Per Second From Period Match Interrupt | `CCU4_Timer` | LED1 1 s an / 1 s aus (Prescaler 2048, 72 MHz, Period-Match-IRQ 44) |
-| Should Count Microseconds With Concatenated 32 Bit Timer | `CCU4_Timer_Concatenation` | LED1 mit 73/72 s Halbperiode, Zählerwert aus High/Low-Slice |
+| Should Count Microseconds With Concatenated 32 Bit Timer | `CCU4_Timer_Concatenation` | LED1 nach 1,0 s noch aus, nach 1,02 s an (73/72 s), Zählerwert aus High/Low-Slice (Lauf ca. 100 s Realzeit) |
