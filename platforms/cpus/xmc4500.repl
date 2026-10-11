@@ -69,3 +69,8 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
     [0-5] -> nvic@[84-89]
+
+// MultiCAN (CAN0); the eight service request lines SR0-SR7 are NVIC interrupts 76-83 (CAN0_0_IRQn ... CAN0_7_IRQn)
+can0: CAN.XMC4XXX_CAN @ sysbus 0x48014000
+    peripheralClockFrequency: 72000000
+    [0-7] -> nvic@[76-83]
