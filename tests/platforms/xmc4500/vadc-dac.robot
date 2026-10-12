@@ -88,8 +88,3 @@ Should Output Sine Wave On DAC Channel 0
     Execute Command           emulation RunFor "0.15"
     ${cfg0}=                  Read Number  sysbus ReadDoubleWord 0x48018004
     Should Be Equal As Integers  ${cfg0 & 0xFFFFF}  112
-
-Should Measure Triggered By CCU8
-    [Documentation]           CCU8_TRIGGERED_VADC_MEASUREMENT: the queue is triggered by a CCU80 slice; needs the CCU8 component.
-    [Tags]                    skip
-    Skip                      Needs the CCU8 model (component ccu8); the VADC trigger inputs (GPIO 0-15) are ready to be connected.

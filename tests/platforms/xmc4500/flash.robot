@@ -7,7 +7,6 @@ ${FSR}                        0x58002010
 ${SECTOR7}                    0x0C01C000
 ${SECTOR8}                    0x0C020000
 ${UCB0}                       0x0C000000
-${FCE_STUB}                   ${CURDIR}/flash_fce_stub.py
 # FSR bits
 ${PROG}                       ${0x10}
 ${ERASE}                      ${0x20}
@@ -69,14 +68,6 @@ Program Page
 Create Flash Machine
     Create XMC4500 Machine    Empty_XMC_App
 
-Add FCE Stub If Missing
-    [Documentation]           Flash_EEPROM needs the CRC engine; use a stub only if the platform has no FCE model yet.
-    ${at}=                    Execute Command  sysbus WhatPeripheralIsAt 0x50020020
-    ${missing}=               Evaluate  'none' in $at.lower() or 'nothing' in $at.lower() or not $at.strip()
-    IF  ${missing}
-        Execute Command       machine PyDevFromFile @${FCE_STUB} 0x50020000 0x100 True "fceStub"
-    END
-
 *** Test Cases ***
 Should Erase And Program A Sector In Flash_Program
     [Documentation]           The example erases sector 7, programs one page, verifies it and then blinks the LED.
@@ -100,7 +91,6 @@ Should Erase And Program A Sector In Flash_Program
 Should Keep Data In The Emulated EEPROM Across Resets
     [Documentation]           Flash_EEPROM increments 64 bytes stored in flash on every start; the data must survive a reset.
     Create XMC4500 Machine    Flash_EEPROM
-    Add FCE Stub If Missing
     ${tester}=                Create Terminal Tester  sysbus.usic1ch1
     Execute Command           showAnalyzer sysbus.usic1ch1
     Start Emulation

@@ -2,7 +2,7 @@
 
 > Nachbildung des Versatile ADC (4 Gruppen, Queue-/Scan-/Background-Quelle, EMUX) und des 2-Kanal-DAC der XMC4500 für die Beispiele `VADC_Background`, `VADC_Scan`, `VADC_Queue`, `VADC_EMUX` und `DAC_Sine_Wave`.
 
-Referenz: Reference Manual v1.6, Kapitel 19 "Versatile Analog-to-Digital Converter (VADC)" und Kapitel 21 "Digital to Analog Converter (DAC)". Beispiele: `VADC_Background`, `VADC_Scan`, `VADC_Queue`, `VADC_EMUX`, `DAC_Sine_Wave`, `CCU8_TRIGGERED_VADC_MEASUREMENT` (wartet auf CCU8).
+Referenz: Reference Manual v1.6, Kapitel 19 "Versatile Analog-to-Digital Converter (VADC)" und Kapitel 21 "Digital to Analog Converter (DAC)". Beispiele: `VADC_Background`, `VADC_Scan`, `VADC_Queue`, `VADC_EMUX`, `DAC_Sine_Wave`, `CCU8_TRIGGERED_VADC_MEASUREMENT` (Test in [ccu8.md](ccu8.md)).
 
 ## 1. Use Cases
 
@@ -154,4 +154,3 @@ Datei: `tests/platforms/xmc4500/vadc-dac.robot`, Start: `scripts/xmc4500/test.sh
 | Should Convert Queue Entries After External Trigger | `VADC_Queue` | vor dem Trigger 0, danach 0x4d9/0x9b2/0xe8b (Kanäle 1/3/5) |
 | Should Convert External Multiplexer Channels In Sequence Mode | `VADC_EMUX` | Sequenzmodus EMUX 7..0, Wait-for-Read, Result-Event-Interrupt |
 | Should Output Sine Wave On DAC Channel 0 | `DAC_Sine_Wave` | Sinuscode aus Samplezähler, FREQ 4500 → 112 nach erster Note, Kanal 1 = 2048 |
-| Should Measure Triggered By CCU8 | `CCU8_TRIGGERED_VADC_MEASUREMENT` | übersprungen (braucht CCU8) |
