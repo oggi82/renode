@@ -116,3 +116,20 @@ scu:
     1 -> ccu41@8
     2 -> ccu42@8
     3 -> ccu43@8
+
+// Capture/Compare Units 8 (CCU80, CCU81): service request lines SR0-SR3 are NVIC interrupts 60-67 (connections 0-3),
+// the slice outputs OUT00-OUT33 are connections 4-19. SR0 of CCU80 additionally drives VADC gating input M (CCU80.SR0, GPIO 16 + 12),
+// which CCU8_TRIGGERED_VADC_MEASUREMENT selects as trigger source of the queue.
+ccu80: Timers.XMC4XXX_CCU8 @ sysbus 0x40020000
+    scu: scu
+    0 -> nvic@60 | vadc@28
+    [1-3] -> nvic@[61-63]
+
+ccu81: Timers.XMC4XXX_CCU8 @ sysbus 0x40024000
+    scu: scu
+    [0-3] -> nvic@[64-67]
+
+// SCU trigger signals GSC80/GSC81 (CCUCON bits 8-9) drive input H of the matching CCU8 unit
+scu:
+    8 -> ccu80@7
+    9 -> ccu81@7
