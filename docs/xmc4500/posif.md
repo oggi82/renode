@@ -111,7 +111,7 @@ Quadratur: Zustand (A,B) mit Aktivpegeln und Phasentausch; Schritt im Gray-Code 
 - Die Pin-Zuordnung Port -> POSIF-Eingang (Alternativfunktionen) ist nicht in `xmc4500.repl`; die Test-`.repl` verdrahtet P14.7/6/5 auf IN0B/IN1B/IN2B.
 - MCMF.MSS ist 1, solange ein Update freigegeben ist (das Handbuch beschreibt die Polarität widersprüchlich).
 - Capture: Timer-Löschen bei Capture, Full-Flags und der Vier-Register-Modus sind nach dem Handbuch umgesetzt, aber nur der Fall der Beispiele ist getestet.
-- Die Beispiele erzeugen Hall-/Phasensignale mit CCU8-PWM und warten auf deren Period-Match-Flag. Solange CCU8 nicht im Basismodell ist, ersetzen Test-Stubs (Python-Peripherals) die CCU8-Einheiten; die Signale treibt der Test selbst.
+- Die Beispiele erzeugen Hall-/Phasensignale mit CCU8-PWM und warten auf deren Period-Match-Flag. Die CCU8-PWM-Ausgänge sind nicht mit den POSIF-Eingängen verdrahtet (keine Pin-Alternativfunktionen); die Signale treibt der Test selbst. POSIF_Hall startet das POSIF erst nach mehr als vier CCU8-Perioden (ca. 1,6 s je Periode), der Test lässt dafür 9 s virtuell laufen.
 
 ## 5. Manuell nachvollziehen
 
@@ -124,11 +124,9 @@ scripts/xmc4500/build-example.sh POSIF_QD
 
 ## 6. Tests
 
-Dateien: `tests/platforms/xmc4500/posif.robot`, `posif_hall_inputs.repl`, `posif_qd_inputs.repl`, `posif_ccu8_hall_stub.py`, `posif_ccu8_qd_stub.py`. Start: `scripts/xmc4500/test.sh posif`.
+Dateien: `tests/platforms/xmc4500/posif.robot`, `posif_hall_inputs.repl`, `posif_qd_inputs.repl` (Buttons an P14 und POSIF-Eingängen). Start: `scripts/xmc4500/test.sh posif`.
 
 | Test-Case | Beispiel | Prüft |
 |---|---|---|
 | Should Report Time Between Correct Hall Events And Wrong Hall Event | `POSIF_Hall` | Folge 001-011-010-110: Intervallzeile 20 ms (CCU4-Capture über OUT1), 101 danach: "Wrong hall event" |
-| Should Show Rotation Direction And Position From Quadrature Encoder | `POSIF_QD` | A führt: LED1, Position 4, Intervall 0,5 ms; B führt: LED2 aus, Position 0, DVAL = 0 |
-
-Wenn CCU8 gemerged ist, sollen die Stubs entfallen und die Test-`.repl` nur noch die Eingänge bereitstellen (die Beispiele erzeugen die Signale dann selbst über Pin-Verdrahtung).
+| Should Show Rotation Direction And Position From Quadrature Encoder | `POSIF_QD` | A führt: LED1, Position 4, Intervall 0,5 ms (Ausgabe erfolgt im Takt der CCU81-Periode, ca. 0,1 s); B führt: LED2 aus, Position 0, DVAL = 0 |

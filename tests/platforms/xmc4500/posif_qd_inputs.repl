@@ -1,13 +1,7 @@
-// Test extension for POSIF_QD: phase A on P14.7 and phase B on P14.6 (README), routed to POSIF0.IN0B and IN1B; the index input
-// (POSIF0.IN2B) is only driven by the monitor. The CCU81 is replaced by a stub that raises the period match flag of slice 2
-// every 20000th poll (the example prints a line each time it sees the flag).
+// Test extension for POSIF_QD: phase A on P14.7 and phase B on P14.6 (README), routed to POSIF0.IN0B and IN1B.
+// The CCU81 timers of the example (phase signal generation) run unconnected, only their period match flag paces the output lines.
 phaseA: Miscellaneous.Button @ port14 7
     -> port14@7 | posif0@1
 
 phaseB: Miscellaneous.Button @ port14 6
     -> port14@6 | posif0@5
-
-ccu81: Python.PythonPeripheral @ sysbus 0x40024000
-    size: 0x1000
-    initable: true
-    filename: "tests/platforms/xmc4500/posif_ccu8_qd_stub.py"
