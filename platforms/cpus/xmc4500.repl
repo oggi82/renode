@@ -98,44 +98,51 @@ port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
 
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
-    [0-5] -> nvic@[84-89]
+    [0-1] -> nvic@[84-85] | dlr@[46-47]
+    [2-5] -> nvic@[86-89]
 
 // MultiCAN (CAN0); the eight service request lines SR0-SR7 are NVIC interrupts 76-83 (CAN0_0_IRQn ... CAN0_7_IRQn)
 can0: CAN.XMC4XXX_CAN @ sysbus 0x48014000
     peripheralClockFrequency: 72000000
-    [0-7] -> nvic@[76-83]
+    [0-3] -> nvic@[76-79] | dlr@[42-45]
+    [4-7] -> nvic@[80-83]
 
 // USIC1 channel 1: debug UART of the examples whose BSP uses XMC_UART1_CH1 (Flash_EEPROM); SR0-5 = NVIC 90-95
 usic1ch1: UART.XMC4XXX_UART @ sysbus <0x48020200, +0x200>
-    [0-5] -> nvic@[90-95]
+    [0-1] -> nvic@[90-91] | dlr@[48-49]
+    [2-5] -> nvic@[92-95]
 
 // VADC (groups G0-G3 and common block C0): group service requests G0SR0..G3SR3 are NVIC interrupts 18-33, C0SR0..C0SR3 are 14-17
 vadc: Analog.XMC4XXX_VADC @ sysbus <0x40004000, +0x1400>
     nvic: nvic
-    [0-15] -> nvic@[18-33]
-    [16-19] -> nvic@[14-17]
+    [0-15] -> nvic@[18-33] | dlr@[8-23]
+    [16-19] -> nvic@[14-17] | dlr@[4-7]
 
 // DAC with two channels; service requests 0 and 1 are NVIC interrupts 42 and 43
 dac: Analog.XMC4XXX_DAC @ sysbus 0x48018000
     nvic: nvic
-    [0-1] -> nvic@[42-43]
+    [0-1] -> nvic@[42-43] | dlr@[28-29]
 
 // Capture/Compare Units 4 (CCU40-CCU43): service request lines SR0-SR3 are NVIC interrupts 44-59, the slice outputs are connections 4-7
 ccu40: Timers.XMC4XXX_CCU4 @ sysbus 0x4000C000
     scu: scu
-    [0-3] -> nvic@[44-47]
+    [0-1] -> nvic@[44-45] | dlr@[30-31]
+    [2-3] -> nvic@[46-47]
 
 ccu41: Timers.XMC4XXX_CCU4 @ sysbus 0x40010000
     scu: scu
-    [0-3] -> nvic@[48-51]
+    [0-1] -> nvic@[48-49] | dlr@[32-33]
+    [2-3] -> nvic@[50-51]
 
 ccu42: Timers.XMC4XXX_CCU4 @ sysbus 0x40014000
     scu: scu
-    [0-3] -> nvic@[52-55]
+    [0-1] -> nvic@[52-53] | dlr@[34-35]
+    [2-3] -> nvic@[54-55]
 
 ccu43: Timers.XMC4XXX_CCU4 @ sysbus 0x48004000
     scu: scu
-    [0-3] -> nvic@[56-59]
+    [0-1] -> nvic@[56-57] | dlr@[36-37]
+    [2-3] -> nvic@[58-59]
 
 // SCU trigger signals GSC40-GSC43 (CCUCON bits 0-3) drive input I of the matching CCU4 unit
 scu:
@@ -180,6 +187,23 @@ ccu42:
 
 ccu43:
     4 -> posif1@23
+
+// Capture/Compare Units 8 (CCU80, CCU81): service request lines SR0-SR3 are NVIC interrupts 60-67 (connections 0-3),
+// the slice outputs OUT00-OUT33 are connections 4-19. SR0 of CCU80 additionally drives VADC gating input M (CCU80.SR0, GPIO 16 + 12),
+// which CCU8_TRIGGERED_VADC_MEASUREMENT selects as trigger source of the queue.
+ccu80: Timers.XMC4XXX_CCU8 @ sysbus 0x40020000
+    scu: scu
+    0 -> nvic@60 | vadc@28
+    [1-3] -> nvic@[61-63]
+
+ccu81: Timers.XMC4XXX_CCU8 @ sysbus 0x40024000
+    scu: scu
+    [0-3] -> nvic@[64-67]
+
+// SCU trigger signals GSC80/GSC81 (CCUCON bits 8-9) drive input H of the matching CCU8 unit
+scu:
+    8 -> ccu80@7
+    9 -> ccu81@7
 
 // Event Request Units; the service request outputs IOUT0-3 are the NVIC interrupts 1-4 (ERU0) and 5-8 (ERU1).
 // ERU1 feeds IOUT2 and IOUT3 back to some of its own inputs.
@@ -254,22 +278,3 @@ gpdma1: DMA.XMC4XXX_GPDMA @ sysbus 0x50018000
     IRQ -> nvic@110
 
 // DMA request sources (numbering see XMC4XXX_DLR): CCU40-43 SR0/SR1, CAN SR0-3, DAC SR0/1, VADC, USIC0/1 SR0/1
-ccu40:
-    [0-1] -> dlr@[30-31]
-ccu41:
-    [0-1] -> dlr@[32-33]
-ccu42:
-    [0-1] -> dlr@[34-35]
-ccu43:
-    [0-1] -> dlr@[36-37]
-can0:
-    [0-3] -> dlr@[42-45]
-dac:
-    [0-1] -> dlr@[28-29]
-vadc:
-    [0-15] -> dlr@[8-23]
-    [16-19] -> dlr@[4-7]
-usic0ch0:
-    [0-1] -> dlr@[46-47]
-usic1ch1:
-    [0-1] -> dlr@[48-49]
