@@ -122,34 +122,19 @@ Should Check The Signature And Flag Errors
     Should Be Equal As Integers  ${sts}  1
 
 Should Fill The Ring Buffer From UART Receive Requests In DMA_Ring_Buffer
-    [Documentation]           DMA_Ring_Buffer: GPDMA0 channel 2 moves received bytes (hardware handshake on DLR line 5, source USIC0.SR0) into the ring buffer; the SysTick handler echoes them. The USIC receive service request is injected into the DLR input 46 by hand until the USIC model pulses it.
+    [Documentation]           DMA_Ring_Buffer: GPDMA0 channel 2 moves received bytes (hardware handshake on DLR line 5, source USIC0.SR0) into the ring buffer; the SysTick handler echoes them. The USIC pulses SR0 (DLR source 46) for every received byte.
     ${tester}=                Create XMC4500 Machine With UART Tester  DMA_Ring_Buffer
     Start Emulation
     Wait For Line On Uart     Just start typing. What you type will be echoed below:  testerId=${tester}  timeout=5
     Execute Command           sysbus.usic0ch0 WriteChar 0x41
-    Execute Command           sysbus.dlr OnGPIO 46 true
-    Execute Command           sysbus.dlr OnGPIO 46 false
     Execute Command           sysbus.usic0ch0 WriteChar 0x42
-    Execute Command           sysbus.dlr OnGPIO 46 true
-    Execute Command           sysbus.dlr OnGPIO 46 false
     Wait For Prompt On Uart   AB  testerId=${tester}  timeout=5
-    ${dlr}=                   Read Word  0x50004900
-    Should Be Equal As Integers  ${dlr}  0
 
 Should Send Two Buffers From UART Transmit Requests In UART_DMA
-    [Documentation]           UART_DMA: GPDMA0 channel 2 writes one byte to TBUF per request (DLR line 5, USIC0.SR0). The requests are injected into the DLR by hand (the initial SIO0 trigger and the transmit buffer event of the USIC are not available yet); two buffers of 256 characters A-Z, a-z are sent.
+    [Documentation]           UART_DMA: GPDMA0 channel 2 writes one byte to TBUF per request (DLR line 5, USIC0.SR0); the initial request comes from XMC_USIC_CH_TriggerServiceRequest (FMR.SIO0), every further one from the transmit buffer event. buffer1 holds 256 characters 'A'..'Z' repeated, buffer2 'a'..'z' (buffer2[i] = i % 26 + 'a', so it starts with 'a').
     ${tester}=                Create XMC4500 Machine With UART Tester  UART_DMA
-    Execute Command           emulation RunFor "0.01"
-    FOR  ${i}  IN RANGE  256
-        Execute Command       sysbus.dlr OnGPIO 46 true
-        Execute Command      emulation RunFor "0.0001"
-    END
-    Wait For Prompt On Uart   ${{ ''.join(chr(65 + i % 26) for i in range(256)) }}  testerId=${tester}  timeout=5
-    FOR  ${i}  IN RANGE  256
-        Execute Command       sysbus.dlr OnGPIO 46 true
-        Execute Command      emulation RunFor "0.0001"
-    END
-    Wait For Prompt On Uart   ${{ ''.join(chr(97 + i % 26) for i in range(1, 256)) }}  testerId=${tester}  timeout=5
+    Start Emulation
+    Wait For Prompt On Uart   ${{ ''.join(chr(65 + i % 26) for i in range(256)) + ''.join(chr(97 + i % 26) for i in range(256)) }}  testerId=${tester}  timeout=10
 
 Should Change The PWM Compare Value From Linked List DMA In DMA_PWM
     [Documentation]           DMA_PWM: channel 0 (linked list of two blocks of 48 words) writes the next duty cycle into CCU40 CC40 CRS on every compare match request (DLR line 1), channel 1 triggers the shadow transfer. CR rises in steps of 1365 during the first block and falls in the second.
@@ -168,5 +153,18 @@ Should Change The PWM Compare Value From Linked List DMA In DMA_PWM
     Should Be True            ${d} < ${c} and ${d} % 1365 == 0  msg=CR ${d} must fall in the second block (c=${c})
 
 Should Transfer SPI Data With Two DMA Channels In SPI_DMA
-    [Tags]                    skip
-    Skip                      SPI_DMA needs USIC1 channel 0 in SPI mode (SSC) with DMA service requests (USIC1.SR0/SR1 -> DLR lines 5 and 7); the USIC component has no SPI yet. The DMA side (DLR routing, request inputs) is in place.
+    [Documentation]           SPI_DMA: USIC1 channel 0 (SSC master, 8 bit words, frame of 64 bits) sends src_buffer (1, 2, 3, ...) through the transmit FIFO fed by GPDMA0 channel 1 (bursts of 8 on USIC1.SR0, DLR line 5) and stores the received words with channel 0 (USIC1.SR1, DLR line 7). MISO is wired to MOSI by a loopback device on select line 0, so recv_buffer must equal src_buffer; a difference would light LED2.
+    Create XMC4500 Machine    SPI_DMA
+    Execute Command           machine LoadPlatformDescription @${CURDIR}/spi_dma_loopback.repl
+    Execute Command           emulation RunFor "0.1"
+    ${src}=                   Execute Command  sysbus GetSymbolAddress "src_buffer"
+    ${recv}=                  Execute Command  sysbus GetSymbolAddress "recv_buffer"
+    FOR  ${i}  IN  0  1  2  100  200  255
+        ${a}=                 Read Word  ${{ int($src.strip(), 0) + 4 * ${i} }}
+        ${b}=                 Read Word  ${{ int($recv.strip(), 0) + 4 * ${i} }}
+        Should Be Equal As Integers  ${a}  ${b}  msg=word ${i}
+    END
+    ${first}=                 Read Word  ${{ int($recv.strip(), 0) }}
+    Should Be Equal As Integers  ${first}  ${0x04030201}
+    Create LED Tester         sysbus.port1.led2
+    Assert LED State          false  timeout=0

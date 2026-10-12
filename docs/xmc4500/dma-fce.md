@@ -102,13 +102,14 @@ CRC-Rechnung der FCE: jedes IR-Wort wird MSB zuerst in das CRC-Register geschobe
 
 ## 4. Vereinfachungen und bekannte Luecken
 
-- Zeitverhalten: ein Bus-Transfer je Tick eines Timers mit `transferFrequency` (10 MHz); der Timer laeuft nur, solange ein Kanal weiterkommt. Burst-Laengen beeinflussen nur die Zahl der Elemente je Anforderung.
+- Zeitverhalten: ein Bus-Transfer je Tick eines Timers mit `transferFrequency` (Standard 10 MHz, in der repl 36 MHz); der Timer laeuft nur, solange ein Kanal weiterkommt. Burst-Laengen beeinflussen nur die Zahl der Elemente je Anforderung.
 - Peripherie als Flusskontrolle (TT_FC >= 4) nicht unterstuetzt (Warnung, GPDMA wird Flusskontrolle). LST-Register, SSTAT/DSTAT-Abruf, FIFO_MODE/FCMODE/Locking/Polaritaet werden nur gespeichert.
 - Fehlerinterrupt nur bei Zugriff auf nicht abgebildete Adressen.
 - Das Request-Ack erfolgt beim Start der Transaktion, damit ein sofort folgender Puls der Peripherie nicht als Overrun verloren geht.
 - Mehrere Kanaele auf derselben DLR-Linie (`DMA_PWM`) bedienen jeweils dieselbe Anforderung.
 - FCE: Busfehler fuer schmale Schreibzugriffe (BEF) und redundante Register werden nicht nachgebildet; Schreiben auf CHECK/LENGTH nur nach dem Schluessel 0xFACECAFE; Schreibzugriffe bei gesetztem `CLC.DISR` (Reset-Zustand) werden ignoriert. 
-- `XMC4XXX_UART` erhielt `AllowedTranslations` (Byte-/Wortzugriffe der DMA). Das USIC feuert noch keine Service-Request-Pulse pro Ereignis und kennt `FMR.SIOx` nicht; daher injizieren die Tests `Ring_Buffer` und `UART_DMA` die USIC0.SR0-Anforderung ueber `dlr OnGPIO 46 true`. `SPI_DMA` braucht den USIC-SPI-Kanal (USIC1 ch0) und ist uebersprungen.
+- USIC (jetzt `XMC4XXX_USIC`): pulst die Service-Request-Leitungen je Ereignis; die Tests brauchen keine manuelle DLR-Injektion mehr. Fuer `SPI_DMA` gibt der SSC-Master das Wort erst eine vier SCLK-Perioden nach dem Start aus TBUF an das Schieberegister ab (Aenderung in `XMC4XXX_USIC_SSC.cs`), damit der 8er-Burst der DMA den FIFO-Fuellstand auf das Limit 7 bringt und danach die naechste Anforderung ausgeloest wird; ohne diese Verzoegerung blieb der Transfer nach dem ersten Burst stehen. Die DMA-Einheiten laufen dafuer mit 36 MHz Transfertakt.
+- Das SPI-Gegenstueck fuer `SPI_DMA` ist `Mocks.SpiLoopbackDevice` (MISO an MOSI) an Select-Leitung 0 von `usic1ch0` (`tests/platforms/xmc4500/spi_dma_loopback.repl`).
 
 ## 5. Manuell nachvollziehen
 
@@ -130,9 +131,9 @@ Datei: `tests/platforms/xmc4500/dma-fce.robot`, Start: `scripts/xmc4500/test.sh 
 | Print Reference CRCs | `FCE_CRC` | RES-Werte wie auf echter Hardware, Mismatch/Length-Error, LED1 |
 | Match Known CRC Check Values | FCE direkt | CRC8 "123456789" = 0x4B, CRC32 gegen zlib, RES-Reset |
 | Check The Signature And Flag Errors | FCE direkt | CHECK/LENGTH, CMF, LEF, Schluessel, CTR.FCM |
-| Fill The Ring Buffer ... | `DMA_Ring_Buffer` | P2M mit Hardware-Handshake, Echo "AB" (Request per Hand) |
-| Send Two Buffers ... | `UART_DMA` | M2P je Anforderung ein Byte, 2 x 256 Zeichen (Request per Hand) |
+| Fill The Ring Buffer ... | `DMA_Ring_Buffer` | P2M mit Hardware-Handshake (USIC0.SR0), Echo "AB" |
+| Send Two Buffers ... | `UART_DMA` | M2P je Anforderung ein Byte, 256 x A-Z, dann 256 x a-z (buffer2 beginnt mit 'a') |
 | Change The PWM Compare Value ... | `DMA_PWM` | Linked List, CR steigt/faellt in Schritten von 1365 |
-| Transfer SPI Data ... | `SPI_DMA` | uebersprungen (USIC-SPI fehlt) |
+| Transfer SPI Data ... | `SPI_DMA` | recv_buffer = src_buffer ueber Loopback-Geraet, LED2 aus |
 
 Der CRC32 von "123456789" (0xCBF43926) laesst sich auf der Hardware nicht direkt pruefen: Kern 0/1 nehmen nur 32-Bit-Woerter; verwendet wurden "12345678" (zlib) und das CRC8-Pruefwort.

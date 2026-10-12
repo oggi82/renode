@@ -287,12 +287,22 @@ gpdma0: DMA.XMC4XXX_GPDMA @ sysbus 0x50014000
     dlr: dlr
     firstDlrLine: 0
     numberOfChannels: 8
+    transferFrequency: 36000000
     IRQ -> nvic@105
 
 gpdma1: DMA.XMC4XXX_GPDMA @ sysbus 0x50018000
     dlr: dlr
     firstDlrLine: 8
     numberOfChannels: 4
+    transferFrequency: 36000000
     IRQ -> nvic@110
 
-// DMA request sources (numbering see XMC4XXX_DLR): CCU40-43 SR0/SR1, CAN SR0-3, DAC SR0/1, VADC, USIC0/1 SR0/1
+// DMA requests of the other USIC channels (SR0/SR1 of USIC0 = DLR sources 46/47, USIC1 = 48/49, USIC2 SR0-1 = 50/51)
+usic0ch1:
+    [0-1] -> dlr@[46-47]
+usic1ch0:
+    [0-1] -> dlr@[48-49]
+usic2ch0:
+    [0-1] -> dlr@[50-51]
+usic2ch1:
+    [0-1] -> dlr@[50-51]
