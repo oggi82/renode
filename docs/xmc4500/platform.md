@@ -38,8 +38,8 @@ flowchart TB
         DSRAM1["dsram1 64 KB @ 0x20000000"]
         DSRAM2["dsram2 32 KB @ 0x30000000"]
         SCU["scu: XMC4XXX_SCU @ 0x50004000"]
-        PORTS["port0..6, 14, 15: XMC4XXX_GPIOPort @ 0x48028000 + n*0x100"]
-        UART["usic0ch0: XMC4XXX_UART @ 0x40030000"]
+        PORTS["port0..5, 14, 15: XMC4XXX_GPIOPort @ 0x48028000 + n*0x100"]
+        UART["usic0ch0 .. usic2ch1: XMC4XXX_USIC (sechs Kanäle, siehe usic.md)"]
     end
     subgraph Board["xmc4500_relax_lite_kit.repl"]
         L1["led1 (P1.1)"]
@@ -112,7 +112,7 @@ stateDiagram-v2
 ## 4. Vereinfachungen und bekannte Lücken
 
 - Kein Boot-ROM, kein Debugger, keine Flash-Wait-States (`0x58002000` ist nur ein Speicherblock).
-- SCU: Interrupts (SRRAW/SRMSK/…), Trap (`TRAPCLR` 0x16C wird gemeldet als "Unhandled write"), Parity, Watchdog/RTC sind nicht enthalten (Komponente `scu-wdt-rtc`).
+- Die SCU ist seit der Komponente `scu-wdt-rtc` deutlich erweitert (Service Requests, Traps, Brownout, Hibernate, WDT, RTC), siehe [scu-wdt-rtc.md](scu-wdt-rtc.md). Die Tabelle oben zeigt nur den Umfang der ersten Version.
 - Die Takt-Statusregister laufen sofort, Frequenzen werden nicht über die Zeit hochgefahren.
 
 ## 5. Manuell nachvollziehen

@@ -59,6 +59,15 @@ Dateien:
 | `posif` | POSIF | `POSIF_Hall`, `POSIF_QD` | [posif.md](posif.md) |
 | `rtos-misc` | FreeRTOS-Lauf, sonstige | `FreeRTOS_Blinky`, `emUSB-Device_HID_Generic` (USB nur, wenn sinnvoll) | [rtos-misc.md](rtos-misc.md) |
 
+## Stand
+
+Alle Komponenten sind umgesetzt und haben einen Robot-Test; die Übersicht, welches der 48 Beispiele ohne Warnungen läuft und welches nicht, steht in [example-status.md](example-status.md). Bekannte Lücken:
+
+- `emUSB-Device_HID_Generic`: kein USB0-Modell, Begründung in [rtos-misc.md](rtos-misc.md).
+- Alternativfunktionen (Peripheral-Ausgang an Port-Pin) sind im Port als Mechanismus vorhanden ([gpio-eru.md](gpio-eru.md)), aber nicht für CCU/USIC/CAN verdrahtet. Die Tests verbinden Signale direkt oder über Test-`.repl`-Dateien.
+- `ERU_HIB_IO`: der Pfad HIB_IO → SCU → ERU0 ist nicht durchgängig modelliert (der Test speist den ERU-Eingang direkt ein).
+- Die Beispiele `WDT_FEED` und `WDT_Prewarning` konfigurieren ein Watchdog-Fenster (720 bis 840 Mio. Takte) bei 32,768 kHz Standby-Takt. Das Modell folgt dem Reference Manual: die erste Fütterung nach 1 s ist ein Bad Service mit Reset (siehe [scu-wdt-rtc.md](scu-wdt-rtc.md)).
+
 ## Manuell zum Ziel: Schritt für Schritt
 
 Das Prinzip: **Die echte Firmware sagt, was modelliert werden muss.** Man lässt sie laufen, sieht, wo sie hängt oder
