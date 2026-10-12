@@ -13,6 +13,10 @@ UART Printf
     Create XMC4500 Machine With UART Tester  UART_Printf
     Start Emulation
     Wait For Line On Uart     Hello World!         timeout=5
+    # FDR/BRG programmed by the XMC library (115200 baud) and the 72 MHz peripheral clock of the SCU
+    ${baud}=                  Execute Command  usic0ch0 BaudRate
+    ${baud}=                  Evaluate  int(${baud})
+    Should Be True            115000 < ${baud} < 115400
 
 UART Transmit
     [Documentation]           UART_Transmit: a greeting is sent every second from the SysTick handler on the debug UART USIC1 channel 1.
@@ -103,3 +107,14 @@ SPI QSPI Flash Erase Program And Read Back
     Wait For Line On Uart     Sector erase successful!  timeout=10
     Wait For Line On Uart     Programming successful!  timeout=60
     Wait For Line On Uart     Successfully completed demo!  timeout=120
+
+I2C Master Controls LED Through Slave Channel
+    [Documentation]           I2C_Master_and_Slave: the master on USIC1 channel 0 (wired to the slave on USIC2 channel 0 via Peer) sends 0xAA / 0x55
+    ...                       every 500 ms; the slave receive interrupt (USIC2 SR2) switches the LED on and off.
+    Create XMC4500 Machine    I2C_Master_and_Slave
+    Execute Command           usic1ch0 ConnectPeer usic2ch0
+    ${led}=                   Create LED Tester  sysbus.port1.led1
+    Start Emulation
+    Assert LED State          true  timeout=1
+    Assert LED State          false  timeout=1
+    Assert LED State          true  timeout=1
