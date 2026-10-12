@@ -116,3 +116,40 @@ scu:
     1 -> ccu41@8
     2 -> ccu42@8
     3 -> ccu43@8
+
+// Position Interfaces POSIF0/POSIF1: SR0/SR1 are NVIC interrupts 68-71 (connections 7 and 8).
+// OUT0-OUT5 (connections 0-5) drive CCU4 inputs of single slices (number 16 + 16 * slice + input letter), HSDA is ST0 of CCU40/41.
+posif0: Miscellaneous.XMC4XXX_POSIF @ sysbus 0x40028000
+    7 -> nvic@68
+    8 -> nvic@69
+    0 -> ccu40@20 | ccu40@36 | ccu40@52
+    1 -> ccu40@21 | ccu40@37
+    2 -> ccu40@43 | ccu40@53 | ccu42@20 | ccu42@36 | ccu42@52 | ccu42@68
+    3 -> ccu40@22 | ccu40@38 | ccu40@54 | ccu40@68
+    4 -> ccu40@39 | ccu40@55
+    5 -> ccu40@69 | ccu42@21 | ccu42@37 | ccu42@53 | ccu42@69
+
+posif1: Miscellaneous.XMC4XXX_POSIF @ sysbus 0x4002C000
+    7 -> nvic@70
+    8 -> nvic@71
+    0 -> ccu41@20 | ccu41@36 | ccu41@52
+    1 -> ccu41@21 | ccu41@37
+    2 -> ccu41@43 | ccu41@53 | ccu43@20 | ccu43@36 | ccu43@52 | ccu43@68
+    3 -> ccu41@22 | ccu41@38 | ccu41@54 | ccu41@68
+    4 -> ccu41@39 | ccu41@55
+    5 -> ccu41@69 | ccu43@21 | ccu43@37 | ccu43@53 | ccu43@69
+
+// CCU4 status bits back to the POSIF: ST0 -> HSDA (hall sampling delay), ST1 -> MSETB (CCU40/41), ST0 of CCU42/43 -> MSETD
+ccu40:
+    4 -> posif0@12
+    5 -> posif0@21
+
+ccu41:
+    4 -> posif1@12
+    5 -> posif1@21
+
+ccu42:
+    4 -> posif0@23
+
+ccu43:
+    4 -> posif1@23
