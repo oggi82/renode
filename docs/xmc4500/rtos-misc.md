@@ -99,7 +99,7 @@ Alternativen:
 ## 5. Vereinfachungen und bekannte Lücken
 
 - Kein USB0-Modell; `emUSB-Device_HID_Generic` bleibt offen (Test übersprungen).
-- Der Start des FreeRTOS-Beispiels erzeugt Warnungen: NVIC-Prioritätsprobe (siehe oben, harmlos) und `scu: Unhandled write to offset 0x16C` (TRAPCLR, gehört zu `scu-wdt-rtc`).
+- Der Start des FreeRTOS-Beispiels erzeugt eine Warnung: NVIC-Prioritätsprobe (siehe oben, harmlos).
 
 ## 6. Manuell nachvollziehen
 
