@@ -29,13 +29,13 @@ Should Capture Timer Value At Both Edges Of The PWM Signal
     Should Be True            abs(${difference} - ${expected}) <= 2  msg=capture difference ${difference} (rising ${rise_value}, falling ${fall_value})
 
 Should Vary Duty Cycle Of Symmetric And Asymmetric PWM
-    [Documentation]           CCU8_PWM: the period match interrupt counts 50 periods (3.61 ms) per step; compare 0 gives a permanently active ST1 (OUT21 = inverted ST1 low), the next step 2500 gives ST1 duty 1 - 2500/65001 for the center aligned slice 2 and the asymmetric slice 3.
+    [Documentation]           CCU8_PWM: each period lasts 3.61 ms, the period match interrupt counts 50 periods (about 0.18 s) per step; compare 0 gives a permanently active ST1 (OUT21 = inverted ST1 low), the next step 2500 gives ST1 duty 1 - 2500/65001 for the center aligned slice 2 and the asymmetric slice 3.
     Create XMC4500 Machine    CCU8_PWM
     Execute Command           machine LoadPlatformDescription @${CURDIR}/ccu8_out_leds.repl
     ${symmetric}=                    Create LED Tester  sysbus.port2.out21Led
     ${asymmetric}=                    Create LED Tester  sysbus.port2.out31Led
     Assert LED Duty Cycle     testDuration=0.1  expectedDutyCycle=0  tolerance=0.01  pauseEmulation=true  testerId=${symmetric}
-    Execute Command           emulation RunFor "0.1"
+    Execute Command           emulation RunFor "0.3"
     Assert LED Duty Cycle     testDuration=0.05  expectedDutyCycle=0.0385  tolerance=0.005  pauseEmulation=true  testerId=${symmetric}
     Assert LED Duty Cycle     testDuration=0.05  expectedDutyCycle=0.0385  tolerance=0.005  pauseEmulation=true  testerId=${asymmetric}
     ${period}=                Read Number  sysbus.ccu80 ReadDoubleWord 0x330
