@@ -54,35 +54,47 @@ flashController: MTD.XMC4XXX_FlashController @ sysbus 0x58002000
     flash: flash
     IRQ -> nvic@12
 
-// Ports P0-P6 and P14-P15; P14 and P15 have analog inputs, their pins are disabled for digital use after reset
+// Ports of the XMC4500-F100 (LQFP-100): numberOfPins is the highest pin number + 1 (reference manual table 25-10), pinDisableResetValue (PDISC)
+// has the pads of pins that are not bonded out in this package set. P5 and P6 only have pins in larger packages, P14 and P15 are analog
+// input ports (PDISC writable, all pads disabled after reset). HWSEL reset: P0.7 (TDI) and P0.8 (TRST) select the debug interface, P2.1 (TDO).
 port0: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028000
-    numberOfPins: 16
+    numberOfPins: 13
+    pinDisableResetValue: 0xE000
+    hwselResetValue: 0x14000
 
 port1: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028100
     numberOfPins: 16
 
 port2: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028200
     numberOfPins: 16
+    pinDisableResetValue: 0x3800
+    hwselResetValue: 0x4
 
 port3: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028300
-    numberOfPins: 16
+    numberOfPins: 7
+    pinDisableResetValue: 0xFF80
 
 port4: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028400
-    numberOfPins: 16
+    numberOfPins: 2
+    pinDisableResetValue: 0xFFFC
 
 port5: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028500
-    numberOfPins: 16
+    numberOfPins: 8
+    pinDisableResetValue: 0xFF78
 
 port6: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028600
-    numberOfPins: 16
+    numberOfPins: 7
+    pinDisableResetValue: 0xFFFF
 
 port14: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028E00
     numberOfPins: 16
     pinDisableResetValue: 0xFFFF
+    analogPort: true
 
 port15: GPIOPort.XMC4XXX_GPIOPort @ sysbus 0x48028F00
     numberOfPins: 16
     pinDisableResetValue: 0xFFFF
+    analogPort: true
 
 // USIC0 channel 0; the six service request lines of a USIC module are NVIC interrupts 84-89
 usic0ch0: UART.XMC4XXX_UART @ sysbus <0x40030000, +0x200>
@@ -131,3 +143,54 @@ scu:
     1 -> ccu41@8
     2 -> ccu42@8
     3 -> ccu43@8
+// Event Request Units; the service request outputs IOUT0-3 are the NVIC interrupts 1-4 (ERU0) and 5-8 (ERU1).
+// ERU1 feeds IOUT2 and IOUT3 back to some of its own inputs.
+eru0: Miscellaneous.XMC4XXX_ERU @ sysbus 0x50004800
+    [0-3] -> nvic@[1-4]
+
+eru1: Miscellaneous.XMC4XXX_ERU @ sysbus 0x40044000
+    internalLoopback: true
+    [0-3] -> nvic@[5-8]
+
+// Pin to ERU input routing of the LQFP-100 package (XMC4500 LQFP100 table of xmc4_eru_map.h). The pins of a port have two kinds of
+// outputs: 0..n-1 is the driven level, n..2n-1 the level seen by the peripherals; n is the numberOfPins of the port.
+// ERU input numbers: channel*8 + 0..3 for A0-A3 and channel*8 + 4..7 for B0-B3.
+port0:
+    14 -> eru0@0
+    13 -> eru0@4
+    23 -> eru0@8
+    22 -> eru0@12
+    21 -> eru0@17
+    20 -> eru0@21
+    25 -> eru0@22
+    17 -> eru0@23
+    24 -> eru0@26
+    19 -> eru0@30
+    15 -> eru0@31
+    18 -> eru1@24
+    16 -> eru1@28
+
+port1:
+    21 -> eru0@16 | eru1@0
+    20 -> eru0@20
+    17 -> eru0@24
+    16 -> eru0@28
+    31 -> eru1@8
+    19 -> eru1@16
+    18 -> eru1@20
+
+port2:
+    21 -> eru0@2
+    20 -> eru0@6
+    16 -> eru0@7
+    19 -> eru0@10
+    18 -> eru0@14
+    22 -> eru0@15
+    17 -> eru1@4
+    23 -> eru1@12
+
+port3:
+    9 -> eru0@1
+    8 -> eru0@5
+    13 -> eru0@25
+    12 -> eru0@29
