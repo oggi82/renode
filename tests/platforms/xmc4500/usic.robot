@@ -65,3 +65,41 @@ SPI Master Sends Three Words To A Slave Channel
     Should Be Equal As Integers  ${w1}  0x0F
     ${w2}=                    Evaluate  int(${w2}) & 0xFFFF
     Should Be Equal As Integers  ${w2}  0x84
+
+SPI Transfer Starts On External Trigger
+    [Documentation]           SPI_EXTTRG_transmit: USIC1 channel 1 holds each 16 bit word until a rising edge arrives at DX2 (P0.12 wired to
+    ...                       the input stage); the words 0x0A0A 0x0505 0x5A5A reach a slave channel only after those edges.
+    Create XMC4500 Machine    SPI_EXTTRG_transmit
+    Create File               ${TEMPDIR}/usic_trigger.repl  port0:\n${SPACE}${SPACE}${SPACE}${SPACE}12 -> usic1ch1@2\n
+    Execute Command           machine LoadPlatformDescription @${TEMPDIR}/usic_trigger.repl
+    Execute Command           usic1ch1 ConnectPeer usic2ch0
+    Execute Command           sysbus WriteDoubleWord 0x48024034 0x0F000100
+    Execute Command           sysbus WriteDoubleWord 0x4802410C 0x03000000
+    Execute Command           sysbus WriteDoubleWord 0x48024040 0x00000001
+    Execute Command           emulation RunFor "0.5"
+    ${level}=                 Read Register  0x48024114
+    ${count}=                 Evaluate  (int(${level}) >> 16) & 0x7F
+    Should Be Equal As Integers  ${count}  0
+    Execute Command           emulation RunFor "0.7"
+    ${level}=                 Read Register  0x48024114
+    ${count}=                 Evaluate  (int(${level}) >> 16) & 0x7F
+    Should Be Equal As Integers  ${count}  3
+    ${w0}=                    Read Register  0x4802411C
+    ${w1}=                    Read Register  0x4802411C
+    ${w2}=                    Read Register  0x4802411C
+    ${w0}=                    Evaluate  int(${w0}) & 0xFFFF
+    ${w1}=                    Evaluate  int(${w1}) & 0xFFFF
+    ${w2}=                    Evaluate  int(${w2}) & 0xFFFF
+    Should Be Equal As Integers  ${w0}  0x0A0A
+    Should Be Equal As Integers  ${w1}  0x0505
+    Should Be Equal As Integers  ${w2}  0x5A5A
+
+SPI QSPI Flash Erase Program And Read Back
+    [Documentation]           SPI_QSPI_Flash: SSC master on USIC0 channel 0 talks to the S25FL032P on the board (erase sector, program page,
+    ...                       read back and compare); progress is printed on the debug UART at USIC1 channel 1.
+    Create XMC4500 Machine With UART Tester  SPI_QSPI_Flash  uart=sysbus.usic1ch1
+    Start Emulation
+    Wait For Line On Uart     SPI QSPI Flash       timeout=10
+    Wait For Line On Uart     Sector erase successful!  timeout=10
+    Wait For Line On Uart     Programming successful!  timeout=60
+    Wait For Line On Uart     Successfully completed demo!  timeout=120

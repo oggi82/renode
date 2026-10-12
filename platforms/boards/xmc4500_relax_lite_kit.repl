@@ -17,3 +17,13 @@ button2: Miscellaneous.Button @ port1 15
 port1:
     1 -> led1@0
     0 -> led2@0
+
+// 32 Mbit SPI flash S25FL032P on the SPI bus of USIC0 channel 0 (select line SELO1, see the SPI_QSPI_Flash example)
+qspiFlashMemory: Memory.MappedMemory
+    size: 0x400000
+
+qspiFlash: SPI.GenericSpiFlash @ usic0ch0 1
+    underlyingMemory: qspiFlashMemory
+    manufacturerId: 0x01
+    memoryType: 0x02
+    capacityCode: 0x15
