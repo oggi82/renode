@@ -1,5 +1,6 @@
 *** Settings ***
 Library                         DateTime
+Library                         String
 
 *** Variables ***
 ${AUTOCOMPLETION_RESC}          scripts/single-node/sam4s.resc
@@ -9,6 +10,11 @@ Test Autocompletion
     [Arguments]               ${suggestion}
     Execute Command           include @${AUTOCOMPLETION_RESC}
     Execute Command           py "monitor.SuggestionNeeded('${suggestion}')"
+
+Property Equals
+    [Arguments]               ${property}  ${value}
+    ${property_value}         Execute Command  ${property}
+    Should Be Equal As Numbers  ${property_value}  ${value}
 
 *** Test Cases ***
 Should Pause Renode
@@ -125,3 +131,128 @@ Should Not Crash On Invalid Scalar Type
 
     Run Keyword And Expect Error  *Cannot convert type 'string' to 'Antmicro.Renode.Peripherals.CPU.RegisterValue'*
     ...                       Execute Command  e51 STVEC a
+
+Should Run SetAndRevertAfter Nested Within Active One
+    Execute Command     i @scripts/single-node/sam4s.resc
+    Execute Command     adc ReferenceVoltage 5
+
+    Execute Command     setAndRevertAfter 0.1 adc ReferenceVoltage 3.1
+    Property Equals     adc ReferenceVoltage  3.1
+
+    Execute Command     sara 0.01 adc ReferenceVoltage 3
+    Property Equals     adc ReferenceVoltage  3
+
+    # Run to 0.01
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3.1
+
+    # Run to 0.1
+    Execute Command     emulation RunFor "0.045"
+    Property Equals     adc ReferenceVoltage  3.1
+    Execute Command     emulation RunFor "0.045"
+    Property Equals     adc ReferenceVoltage  5
+
+Should Run SetAndRevertAfter Overshadowing Active One
+    Execute Command     i @scripts/single-node/sam4s.resc
+    Execute Command     adc ReferenceVoltage 5
+
+    Execute Command     setAndRevertAfter 0.01 adc ReferenceVoltage 3
+    Property Equals     adc ReferenceVoltage  3
+
+    Execute Command     sara 0.1 adc ReferenceVoltage 3.1
+    Property Equals     adc ReferenceVoltage  3.1
+
+    # Run to 0.01
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3.1
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3.1
+
+    # Run to 0.10
+    Execute Command     emulation RunFor "0.045"
+    Property Equals     adc ReferenceVoltage  3.1
+    Execute Command     emulation RunFor "0.045"
+    Property Equals     adc ReferenceVoltage  5
+
+Should Run SetAndRevertAfter With Multiple Targets
+    Execute Command     i @scripts/single-node/sam4s.resc
+    Execute Command     adc ReferenceVoltage 5
+    Execute Command     adc Temperature 13
+
+    Execute Command     setAndRevertAfter 0.1 adc ReferenceVoltage 3.1
+    Property Equals     adc ReferenceVoltage  3.1
+    Execute Command     sara 0.1 adc Temperature 10.5
+    Property Equals     adc Temperature  10.5
+
+    Execute Command     sara 0.01 adc ReferenceVoltage 3
+    Property Equals     adc ReferenceVoltage  3
+
+    # Run to 0.01
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3
+    Property Equals     adc Temperature  10.5
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3.1
+    Property Equals     adc Temperature  10.5
+
+    Execute Command     sara 0.08 adc Temperature 11.5
+    Property Equals     adc Temperature  11.5
+
+    # Run to 0.09
+    Execute Command     emulation RunFor "0.04"
+    Property Equals     adc ReferenceVoltage  3.1
+    Property Equals     adc Temperature  11.5
+    Execute Command     emulation RunFor "0.04"
+    Property Equals     adc ReferenceVoltage  3.1
+    Property Equals     adc Temperature  10.5
+
+    # Run to 0.10
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  3.1
+    Property Equals     adc Temperature  10.5
+    Execute Command     emulation RunFor "0.005"
+    Property Equals     adc ReferenceVoltage  5
+    Property Equals     adc Temperature  13
+
+Should Serialize SetAndRevertAfter While Command Is Running
+    ${file}=            Allocate Temporary File
+
+    Execute Command     i @scripts/single-node/sam4s.resc
+    Execute Command     adc ReferenceVoltage 5
+
+    Execute Command     setAndRevertAfter 0.1 adc ReferenceVoltage 3.1
+
+    # Create snapshot in the midddle of SARA command
+    Execute Command     emulation RunFor "0.05"
+    Property Equals     adc ReferenceVoltage  3.1
+
+    Provides            SARA-saved-mid-run
+
+Should Deserialize SetAndRevertAfter Running Command
+    Requires            SARA-saved-mid-run
+
+    Execute Command     mach set 0
+    Property Equals     adc ReferenceVoltage  3.1
+
+    # Loaded SARA should revert after time passed
+    Execute Command     emulation RunFor "0.05"
+    Property Equals     adc ReferenceVoltage  5
+
+Should Find Unix-only Method on Unix
+    [Tags]              exclude_windows
+    ${file}=            Allocate Temporary File
+    Execute Command     emulation CreateUartPtyTerminal "abc" "${file}" forceCreate=true
+
+Should Fail to Find Unix-only Method on Windows
+    [Tags]                        exclude_osx  exclude_linux
+    ${file}=                      Allocate Temporary File
+    Run Keyword And Expect Error  *does not provide a field, method or property CreateUartPtyTerminal*
+    ...   Execute Command  emulation CreateUartPtyTerminal "abc" "${file}" forceCreate=true
+
+Should Stat File via Python
+    ${file}=            Allocate Temporary File
+    ${file_escaped}=    Replace String  ${file}  \\  \\\\
+    Execute Command     python "import os"
+    Execute Command     python "os.stat('${file_escaped}')"

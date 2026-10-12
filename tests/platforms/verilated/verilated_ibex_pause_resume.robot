@@ -26,7 +26,7 @@ Get Virtual Time
     ${match}=  Get Regexp Matches   ${out}      Elapsed Virtual Time: 00:00:([0-9]+).([0-9]+)     1  2
     ${mc}=  Convert To Integer      ${match[0][1]}
     ${se}=  Convert To Integer      ${match[0][0]}
-    ${t}=   Evaluate                ${mc} + ${se} * 1000000
+    ${t}=   Evaluate                ${mc} + ${se} * 1000000000
     RETURN  ${t}
 
 Sleep And Measure
@@ -38,7 +38,7 @@ Sleep And Measure
 
 *** Test Cases ***
 Should Pause And Resume
-    [Tags]                          skip_host_arm
+    [Tags]                          exclude_host_aarch64
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!  pauseEmulation=true
@@ -47,7 +47,7 @@ Should Pause And Resume
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Pause And Resume Cpu
-    [Tags]                          skip_host_arm
+    [Tags]                          exclude_host_aarch64
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!
@@ -57,7 +57,7 @@ Should Pause And Resume Cpu
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Enter Single Step Blocking
-    [Tags]                          skip_host_arm
+    [Tags]                          exclude_host_aarch64
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!
@@ -67,7 +67,7 @@ Should Enter Single Step Blocking
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Enter Single Step Non Blocking
-    [Tags]                          skip_host_arm
+    [Tags]                          exclude_host_aarch64
     Create Machine
     Execute Command             emulation SingleStepBlocking false
 
@@ -76,12 +76,12 @@ Should Enter Single Step Non Blocking
     ${t1}=  Get Virtual Time
     Test If Uart Is Idle        4
     ${t2}=  Get Virtual Time
-    Should Be True              ${t2} - ${t1} >= 4000000
+    Should Be True              ${t2} - ${t1} >= 4000000000
     Execute Command             cpu ExecutionMode Continuous
     Wait For Line On Uart       CPU:\\s+Ibex               treatAsRegex=true
 
 Should Reset
-    [Tags]                          skip_host_arm
+    [Tags]                          exclude_host_aarch64
     Create Machine
 
     Wait For Line On Uart       Build your hardware, easily!

@@ -3,10 +3,26 @@
 set -u
 set -e
 
+USE_PARALLEL=false
+if command -v env_parallel &> /dev/null
+then
+    # The env_parallel command stores ignored values in this variable
+    # so it needs to be defined for the `set -u` flag to not error
+    PARALLEL_IGNORED_NAMES=""
+    # Source the env_parallel init script
+    . env_parallel.bash
+    # If the `--session` start fails it mean that the installed
+    # version of GNU parallel is too old to have the features we need
+    if env_parallel --session &> /dev/null
+    then
+        USE_PARALLEL=true
+    fi
+fi
+
+
 ROOT_PATH="$(cd "$(dirname $0)"; echo $PWD)"
 export ROOT_PATH
 OUTPUT_DIRECTORY="$ROOT_PATH/output"
-EXPORT_DIRECTORY=""
 
 UPDATE_SUBMODULES=false
 CONFIGURATION="Release"
@@ -15,41 +31,39 @@ CLEAN=false
 PACKAGES=false
 NIGHTLY=false
 PORTABLE=false
+UI=false
 SOURCE_PACKAGE=false
 HEADLESS=false
 SKIP_FETCH=false
 EXTERNAL_LIB_ONLY=false
 TLIB_EXPORT_COMPILE_COMMANDS=false
+SHARED=false
 EXTERNAL_LIB_ARCH=""
-NET=false
-TFM="net462"
+TFM="net8.0"
 GENERATE_DOTNET_BUILD_TARGET=true
 PARAMS=()
-CUSTOM_PROP=
-NET_FRAMEWORK_VER=
 RID="linux-x64"
-HOST_ARCH="i386"
+MULTIPLATFORM=false
+HOST_ARCH=
 # Common cmake flags
-CMAKE_COMMON=""
+CMAKE_COMMON="${RENODE_EXTRA_CMAKE_ARGS:-}"
 
 function print_help() {
-  echo "Usage: $0 [-cdvspnt] [-b properties-file.csproj] [--no-gui] [--skip-fetch] [--profile-build] [--external-lib-only] [--tlib-export-compile-commands] [--external-lib-arch <arch>] [--host-arch i386|aarch64] [--source-package] [-- <ARGS>]"
+  echo "Usage: $0 [-cdvspntm] [--no-gui] [--skip-fetch] [--profile-build] [--external-lib-only] [--tlib-export-compile-commands] [--external-lib-arch <arch>] [--host-arch i386|aarch64] [--source-package] [--ui] [-- <ARGS>]"
   echo
   echo "-c                                clean instead of building"
   echo "-d                                build Debug configuration"
   echo "-v                                verbose output"
   echo "-p                                create packages after building"
   echo "-t                                create a portable package"
+  echo "-m                                create a multi-platform package"
   echo "--source-package                  build a source package (dotnet on Linux only)"
   echo "-n                                tag built packages as nightly"
   echo "-s                                update submodules"
   echo "-b                                custom build properties file"
-  echo "-o                                custom output directory"
   echo "--skip-fetch                      skip fetching submodules and additional resources"
   echo "--no-gui                          build with GUI disabled"
-  echo "--force-net-framework-version     build against different version of .NET Framework than specified in the solution"
-  echo "--net                             build with dotnet"
-  echo "-B                                bundle target runtime (default value: $RID, requires --net, -t)"
+  echo "-B                                bundle target runtime (default value: $RID, requires -t)"
   echo "-F                                select the target framework for which Renode should be built (default value: $TFM)"
   echo "--profile-build                   build optimized for profiling"
   echo "--tlib-coverage                   build tlib with coverage reporting"
@@ -59,10 +73,13 @@ function print_help() {
   echo "--host-arch                       build with a specific tcg host architecture (default: i386)"
   echo "--skip-dotnet-target-generation   don't generate 'Directory.Build.targets' file, useful when experimenting with different build settings"
   echo "--tcg-opcode-backtrace            collect a backtrace for each emitted TCG opcode, to track internal TCG errors (implies Debug configuration)"
-  echo "<ARGS>                            arguments to pass to the build system"
+  echo "--shared                          build the librenode native library"
+  echo "--ui                              rebuild the web-based UI"
+  echo "--werror                          treat warnings as errors in both CMake and Dotnet builds"
+  echo "<ARGS>                            arguments to pass to the dotnet build system"
 }
 
-while getopts "cdvpnstb:o:B:F:-:" opt
+while getopts "cdvpnstmB:F:-:" opt
 do
   case $opt in
     c)
@@ -83,24 +100,16 @@ do
     t)
       PORTABLE=true
       ;;
+    m)
+      MULTIPLATFORM=true
+      ;;
     s)
       UPDATE_SUBMODULES=true
-      ;;
-    b)
-      CUSTOM_PROP=$OPTARG
-      ;;
-    o)
-      EXPORT_DIRECTORY=$OPTARG
-      echo "Setting the output directory to $EXPORT_DIRECTORY"
       ;;
     B)
       RID=$OPTARG
       ;;
     F)
-      if ! $NET; then
-        echo "-F requires --net being set"
-        exit 1
-      fi
       TFM=$OPTARG
       ;;
     -)
@@ -111,16 +120,8 @@ do
         "skip-fetch")
           SKIP_FETCH=true
           ;;
-        "force-net-framework-version")
-          shift $((OPTIND-1))
-          NET_FRAMEWORK_VER="p:TargetFrameworkVersion=v$1"
-          PARAMS+=("$NET_FRAMEWORK_VER")
-          OPTIND=2
-          ;;
         "net")
-          NET=true
-          TFM="net8.0"
-          PARAMS+=(p:NET=true)
+          echo "'--net' flag is a no-op and will be removed in the future" >&1
           ;;
         "source-package")
           SOURCE_PACKAGE=true
@@ -169,6 +170,16 @@ do
 
           CMAKE_COMMON+=" -DTCG_OPCODE_BACKTRACE=ON"
           ;;
+        "shared")
+          SHARED=true
+          ;;
+        "ui")
+          UI=true
+          ;;
+        "werror" | "Werror")
+          CMAKE_COMMON+=" -DFAIL_ON_WARNINGS=ON"
+          PARAMS+=(p:TreatWarningsAsErrors=true)
+          ;;
         *)
           print_help
           exit 1
@@ -183,13 +194,17 @@ do
 done
 shift "$((OPTIND-1))"
 PARAMS+=(
-  # By default use CC as Compiler- and LinkerPath, and AR as ArPath
-  ${CC:+"p:CompilerPath=$CC"}
-  ${CC:+"p:LinkerPath=$CC"}
-  ${AR:+"p:ArPath=$AR"}
-  # But allow users to override it
   "$@"
 )
+
+# Export so that packaging scripts can name headless artifacts accordingly
+export HEADLESS
+
+if $HEADLESS && { $PACKAGES || $MULTIPLATFORM; }
+then
+    echo "--no-gui currently supports portable packages only, use -t without -p or -m."
+    exit 1
+fi
 
 if [ -n "${PLATFORM:-}" ]
 then
@@ -209,6 +224,9 @@ if [ ! -e .git ]
 then
   SKIP_FETCH=true
   UPDATE_SUBMODULES=false
+  COMMIT_STRING="notgit"
+else
+  COMMIT_STRING="git$(git rev-parse --short=9 HEAD)"
 fi
 
 if $SKIP_FETCH
@@ -236,6 +254,8 @@ else
 fi
 
 . "${ROOT_PATH}/tools/common.sh"
+. "${ROOT_PATH}/tools/building/native_interface_runtime_config.sh"
+. "${ROOT_PATH}/tools/building/prepare_portable_native_interface_runtime.sh"
 
 if $SKIP_FETCH
 then
@@ -248,12 +268,17 @@ if $HEADLESS
 then
     BUILD_TARGET=Headless
     PARAMS+=(p:GUI_DISABLED=true)
-elif $ON_WINDOWS
-then
-    BUILD_TARGET=Windows
-    TFM="$TFM-windows10.0.17763.0"
+    # Custom configurations (like ReleaseHeadless) do not inherit the SDK's optimization defaults
+    # for Release, so enable optimization explicitly here.
+    if [ "$CONFIGURATION" = "Release" ]; then
+        PARAMS+=(p:Optimize=true)
+    fi
 else
-    BUILD_TARGET=Mono
+    BUILD_TARGET=""
+fi
+
+if [[ -z "$HOST_ARCH" ]]; then
+    HOST_ARCH="$DETECTED_ARCH"
 fi
 
 # Set correct RID
@@ -271,115 +296,113 @@ elif $ON_WINDOWS; then
     RID="win-x64"
 fi
 
-if [[ $GENERATE_DOTNET_BUILD_TARGET = true ]]; then
+SUPPORTED_RIDS=(
+  "linux-x64"
+  "linux-arm64"
+  "osx-x64"
+  "osx-arm64"
+  "win-x64"
+)
+
+SUPPORTED_UI_RIDS=(
+  "linux_x64"
+  "linux_arm64"
+  "mac_x64"
+  "mac_arm64"
+  "win_x64"
+)
+
+# macos `cp` does not have the -u flag
+if $ON_OSX; then
+  cp_u() {
+    cp $@
+  }
+  sed_inplace() {
+    sed -i '' "$@"
+  }
+else
+  cp_u() {
+    cp -u $@
+  }
+  sed_inplace() {
+    sed -i "$@"
+  }
+fi
+export -f cp_u sed_inplace
+
+function generate_build_target() {
+  if ! $GENERATE_DOTNET_BUILD_TARGET; then
+    return
+  fi
   if $ON_WINDOWS; then
     # CsWinRTAotOptimizerEnabled is disabled due to a bug in dotnet-sdk.
     # See: https://github.com/dotnet/sdk/issues/44026
     OS_SPECIFIC_TARGET_OPTS='<CsWinRTAotOptimizerEnabled>false</CsWinRTAotOptimizerEnabled>'
   fi
 
-cat <<EOF > "$(get_path "$PWD/Directory.Build.targets")"
+  BUILD_TARGETS_FILE=$(mktemp)
+  BUILD_TARGETS_PATH="$(get_path "$PWD/Directory.Build.targets")"
+  # For Xwt.WPF specifically this has to be `.props` rather than `.targets` because we need to override these values in the csproj
+  BUILD_PROPS_PATH_WPF="$(get_path "$PWD/lib/termsharp/xwt/Xwt.WPF/Directory.Build.props")"
+  cat <<EOF > "$BUILD_TARGETS_FILE"
 <Project>
   <PropertyGroup>
     <TargetFrameworks>$TFM</TargetFrameworks>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     ${OS_SPECIFIC_TARGET_OPTS:+${OS_SPECIFIC_TARGET_OPTS}}
   </PropertyGroup>
 </Project>
 EOF
 
-fi
+  cp_u "$BUILD_TARGETS_FILE" "$BUILD_PROPS_PATH_WPF"
+  cp_u "$BUILD_TARGETS_FILE" "$BUILD_TARGETS_PATH"
+  rm "$BUILD_TARGETS_FILE"
+}
 
-if $NET
-then
-  export DOTNET_CLI_TELEMETRY_OPTOUT=1
-  CS_COMPILER="dotnet build"
-  TARGET="`get_path \"$PWD/Renode_NET.sln\"`"
-  BUILD_TYPE="dotnet"
-else
-  TARGET="`get_path \"$PWD/Renode.sln\"`"
-  BUILD_TYPE="mono"
+generate_build_target
+
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+TARGET="`get_path \"$PWD/Renode.sln\"`"
+
+if $ON_LINUX; then
+  PARAMS+=(p:WPFPath=$ROOT_PATH/lib/resources/libraries/WPF/$RID)
 fi
 
 OUT_BIN_DIR="$(get_path "output/bin/${CONFIGURATION}")"
-BUILD_TYPE_FILE=$(get_path "${OUT_BIN_DIR}/build_type")
-
-# Verify Mono and mcs version on Linux and macOS
-if ! $ON_WINDOWS && ! $NET
-then
-    if ! [ -x "$(command -v mcs)" ]
-    then
-        MINIMUM_MONO=`get_min_mono_version`
-        echo "mcs not found. Renode requires Mono $MINIMUM_MONO or newer. Please refer to documentation for installation instructions. Exiting!"
-        exit 1
-    fi
-
-    verify_mono_version
-fi
 
 # Copy properties file according to the running OS
 mkdir -p "$OUTPUT_DIRECTORY"
-if [ -n "${CUSTOM_PROP}" ]; then
-    PROP_FILE=$CUSTOM_PROP
-else
-    if $ON_OSX
-    then
-      PROP_FILE="${CURRENT_PATH:=.}/src/Infrastructure/src/Emulator/Cores/osx-properties.csproj"
-    elif $ON_LINUX
-    then
-      PROP_FILE="${CURRENT_PATH:=.}/src/Infrastructure/src/Emulator/Cores/linux-properties.csproj"
-    else
-      PROP_FILE="${CURRENT_PATH:=.}/src/Infrastructure/src/Emulator/Cores/windows-properties.csproj"
-    fi
-fi
-cp "$PROP_FILE" "$OUTPUT_DIRECTORY/properties.csproj"
-
-if ! $NET
-then
-  # Assets files are not deleted during `dotnet clean`, as it would confuse intellisense per comment in https://github.com/NuGet/Home/issues/7368#issuecomment-457411014,
-  # but we need to delete them to build Renode again for .NETFramework since `project.assets.json` doesn't play well if project files share the same directory.
-  # If `Renode_NET.sln` is picked for OmniSharp, it will trigger reanalysis of the project after removing assets files.
-  # We don't remove these files as part of `clean` target, because other intermediate files are well separated between .NET and .NETFramework
-  # and enforcing `clean` every time before rebuilding would slow down the build process on both frameworks.
-  find $ROOT_PATH -type f -name 'project.assets.json' -delete
-fi
 
 CORES_PATH="$ROOT_PATH/src/Infrastructure/src/Emulator/Cores"
+UI_PATH="$ROOT_PATH/src/UI"
 
 # clean instead of building
 if $CLEAN
 then
-    for project_dir in $(find "$(get_path "${ROOT_PATH}/src")" -iname '*.csproj' -exec dirname '{}' \;)
-    do
-      for dir in {bin,obj}/{Debug,Release}
-      do
-        output_dir="$(get_path "${project_dir}/${dir}")"
-        if [[ -d "${output_dir}" ]]
-        then
-          echo "Removing: ${output_dir}"
-          rm -rf "${output_dir}"
-        fi
-      done
-    done
-
-    # Manually clean the main output directory as it's location is non-standard
-    main_output_dir="$(get_path "${OUTPUT_DIRECTORY}/bin")"
-    if [[ -d "${main_output_dir}" ]]
+  remove_dir() {
+    output_dir="$(get_path "$1")"
+    if [[ -d "${output_dir}" ]]
     then
-      echo "Removing: ${main_output_dir}"
-      rm -rf "${main_output_dir}"
+      echo "Removing: ${output_dir}"
+      rm -rf "${output_dir}"
     fi
-    exit 0
-fi
+  }
+  for project_dir in $(find "$(get_path "${ROOT_PATH}")" -iname '*.csproj' -exec dirname '{}' \;)
+  do
+    for dir in {bin,obj}/{Debug,Release}{,Headless}
+    do
+      remove_dir "${project_dir}/${dir}"
+    done
+  done
 
-# Check if a full rebuild is needed
-if [[ -f "$BUILD_TYPE_FILE" ]]
-then
-  if [[ "$(cat "$BUILD_TYPE_FILE")" != "$BUILD_TYPE" ]]
-  then
-    echo "Attempted to build Renode in a different configuration than the previous build"
-    echo "Please run '$0 -c' to clean the previous build before continuing"
-    exit 1
-  fi
+  # Manually clean the main output directories as it's location is non-standard
+  remove_dir "${OUTPUT_DIRECTORY}/bin"
+  remove_dir "${OUTPUT_DIRECTORY}/publish"
+
+  # Tlib shared libraries
+  remove_dir "${CORES_PATH}/bin"
+  remove_dir "${CORES_PATH}/obj"
+  exit 0
 fi
 
 # check weak implementations of core libraries
@@ -387,11 +410,12 @@ pushd "$ROOT_PATH/tools/building" > /dev/null
 ./check_weak_implementations.sh
 popd > /dev/null
 
-PARAMS+=(p:Configuration="${CONFIGURATION}${BUILD_TARGET}" p:GenerateFullPaths=true p:Platform="\"$BUILD_PLATFORM\"" p:Architecture="$HOST_ARCH")
+PARAMS+=(p:Configuration="${CONFIGURATION}${BUILD_TARGET}" p:GenerateFullPaths=true p:Platform="\"$BUILD_PLATFORM\"" p:Architecture="$HOST_ARCH" p:CommitString="$COMMIT_STRING")
 
 # Paths for tlib
-CORES_BUILD_PATH="$CORES_PATH/obj/$CONFIGURATION"
 CORES_BIN_PATH="$CORES_PATH/bin/$CONFIGURATION"
+NATIVE_CORES_BUILD_PATH="$CORES_PATH/obj/$CONFIGURATION/$RID"
+NATIVE_CORES_BIN_PATH="$CORES_BIN_PATH/$RID"
 
 # Cmake generator, handled in their own variable since the names contain spaces
 if $ON_WINDOWS
@@ -412,7 +436,7 @@ fi
 
 # This list contains all cores that will be built.
 # If you are adding a new core or endianness add it here to have the correct tlib built
-CORES=(arm.le arm.be arm64.le arm-m.le arm-m.be ppc.le ppc.be ppc64.le ppc64.be i386.le x86_64.le riscv.le riscv64.le sparc.le sparc.be xtensa.le)
+CORES=(arm.le arm.be arm64.le arm-m.le arm-m.be ppc.le ppc.be ppc64.le ppc64.be i386.le x86_64.le riscv.le riscv64.le sparc.le sparc.be xtensa.le arm-experimental.le)
 
 # if '--external-lib-arch' was used - pick the first matching one
 if [[ ! -z $EXTERNAL_LIB_ARCH ]]; then
@@ -433,20 +457,19 @@ fi
 
 # build KVM - currently it's supported only on Linux
 if $ON_LINUX && [[ "$HOST_ARCH" == "i386" ]] && [[ -z $EXTERNAL_LIB_ARCH || "${CORES[@]}" == "i386kvm.le" ]]; then
-    KVM_CORE_DIR="$CORES_BUILD_PATH/virt"
+    KVM_CORE_DIR="$NATIVE_CORES_BUILD_PATH/virt"
     mkdir -p $KVM_CORE_DIR
     pushd "$KVM_CORE_DIR" > /dev/null
     cmake "$CORES_PATH/virt"
     cmake --build . -j$(nproc)
-    CORE_BIN_DIR=$CORES_BIN_PATH/lib
-    mkdir -p $CORE_BIN_DIR
-    cp -u -v *.so $CORE_BIN_DIR/
+    mkdir -p $NATIVE_CORES_BIN_PATH
+    cp_u -v *.so $NATIVE_CORES_BIN_PATH/
     popd > /dev/null
 fi
 
-# build tlib
-for core_config in "${CORES[@]}"
-do
+build_core () {
+    set -e
+    core_config=$1
     if [[ $core_config == *"kvm"* ]]; then
         continue
     fi
@@ -458,9 +481,13 @@ do
     if [[ $CORE =~ "64" ]]; then
       BITS=64
     fi
+    # TGAU: this is related to TARGET_WORD_SIZE in tlib CMakeLists.txt
+    if [[ $CORE =~ ^arm-experimental ]]; then
+      BITS=64
+    fi
     # Core specific flags to cmake
     CMAKE_CONF_FLAGS="-DTARGET_ARCH=$CORE -DTARGET_WORD_SIZE=$BITS -DCMAKE_BUILD_TYPE=$CONFIGURATION"
-    CORE_DIR=$CORES_BUILD_PATH/$CORE/$ENDIAN
+    CORE_DIR=$NATIVE_CORES_BUILD_PATH/$CORE/$ENDIAN
     mkdir -p $CORE_DIR
     pushd "$CORE_DIR" > /dev/null
     if [[ $ENDIAN == "be" ]]; then
@@ -471,44 +498,58 @@ do
     fi
     cmake "$CMAKE_GEN" $CMAKE_COMMON $CMAKE_CONF_FLAGS -DHOST_ARCH=$HOST_ARCH $CORES_PATH
     cmake --build . -j"$(nproc)"
-    CORE_BIN_DIR=$CORES_BIN_PATH/lib
-    mkdir -p $CORE_BIN_DIR
-    if $ON_OSX; then
-        # macos `cp` does not have the -u flag
-        cp -v tlib/*.so $CORE_BIN_DIR/
-    else
-        cp -u -v tlib/*.so $CORE_BIN_DIR/
-    fi
+    mkdir -p $NATIVE_CORES_BIN_PATH
+    cp_u -v tlib/*.so $NATIVE_CORES_BIN_PATH/
     # copy compile_commands.json to tlib directory
     if [[ "$TLIB_EXPORT_COMPILE_COMMANDS" = true ]]; then
        command cp -v -f $CORE_DIR/compile_commands.json $CORES_PATH/tlib/
     fi
     popd > /dev/null
-done
+}
+
+# build tlib
+if $USE_PARALLEL
+then
+    echo "Starting parallel tlib build"
+    env_parallel build_core ::: "${CORES[@]}"
+    env_parallel --end-session
+else
+    for core_config in "${CORES[@]}"
+    do
+        build_core $core_config
+    done
+fi
+
+# Remove pre-multiplatform tlib `lib` directory
+rm -rf "$CORES_BIN_PATH/lib"
+# Copy tlib
+mkdir -p "$OUT_BIN_DIR/platform-lib"
+cp_u -r $CORES_BIN_PATH/. $OUT_BIN_DIR/platform-lib
 
 if $EXTERNAL_LIB_ONLY
 then
     exit 0
 fi
 
-# build
-eval "$CS_COMPILER $(build_args_helper "${PARAMS[@]}") $TARGET"
-echo -n "$BUILD_TYPE" > "$BUILD_TYPE_FILE"
+# Remove pre-deterministic versioning `Properties` directory
+rm -rf "$ROOT_PATH/src/Renode/Properties"
 
-# copy llvm library
-LLVM_LIB="libllvm-disas"
-if [[ $HOST_ARCH == "aarch64" ]]; then
-  # aarch64 host binaries have a different name
-  LLVM_LIB="libllvm-disas-aarch64"
+# build
+dotnet build "${PARAMS[@]/#/-}" $TARGET
+
+if $ON_WINDOWS; then
+  python3() {
+    PY_PYTHON=3 py "$@"
+  }
 fi
-if [[ "${DETECTED_OS}" == "windows" ]]; then
-  LIB_EXT="dll"
-elif [[ "${DETECTED_OS}" == "osx" ]]; then
-  LIB_EXT="dylib"
+
+if ! $HEADLESS
+then
+    python3 ./tools/add-wpf-dep.py "$OUT_BIN_DIR/Renode.runtimeconfig.json" "$OUT_BIN_DIR/RenodeWPF.runtimeconfig.json"
+    ln -fs Renode.dll "$OUT_BIN_DIR/RenodeWPF.dll"
 else
-  LIB_EXT="so"
+    rm -f "$OUT_BIN_DIR/RenodeWPF.runtimeconfig.json" "$OUT_BIN_DIR/RenodeWPF.dll"
 fi
-cp lib/resources/llvm/$LLVM_LIB.$LIB_EXT $OUT_BIN_DIR/libllvm-disas.$LIB_EXT
 
 # on arm64 macOS System.Drawing.Common can't find libgdiplus so we symlink it to the output directory
 # this is only used for `FrameBufferTester`
@@ -517,12 +558,92 @@ if [[ $RID == "osx-arm64" ]]; then
   if [ -e $GDIPLUS_PATH ]; then
     # For some reason System.Drawing.Common does not search the binary root when running from a source build
     # but does for a package, so just link it to both locations so the packaging scripts do not have to be updated
-    ln -s -f $GDIPLUS_PATH $OUT_BIN_DIR/runtimes/osx-arm64/native/libgdiplus.dylib
-    mkdir -p $OUT_BIN_DIR/osx-arm64
-    ln -s -f $GDIPLUS_PATH $OUT_BIN_DIR/osx-arm64/libgdiplus.dylib
+    mkdir -p $OUT_BIN_DIR/runtimes/unix/lib/netcoreapp3.0
+    ln -s -f $GDIPLUS_PATH $OUT_BIN_DIR/runtimes/unix/lib/netcoreapp3.0/libgdiplus.dylib
+    mkdir -p $OUT_BIN_DIR/unix/lib/netcoreapp3.0/
+    ln -s -f $GDIPLUS_PATH $OUT_BIN_DIR/unix/lib/netcoreapp3.0/libgdiplus.dylib
   else
     echo "libgdiplus.dylib not found by build.sh, FrameBufferTester might not work"
   fi
+fi
+
+# `OUT_BIN_DIR`'s goes through `cygwin -aw` on Windows, so it's already absolute
+# The path starts with a drive letter on Windows, so we have to special-case it
+if [[ "$OUT_BIN_DIR" != "/"* ]] && ! $ON_WINDOWS; then
+  OUT_BIN_DIR="$PWD/$OUT_BIN_DIR"
+fi
+
+# NOTE: This has to be consistent with `SUPPORTED_RIDS`
+LLVM_DISAS_EXTS=(
+  .so
+  -aarch64.so
+  .dylib
+  -aarch64.dylib
+  .dll
+)
+
+# Copy libllvm-disas
+for idx in "${!SUPPORTED_RIDS[@]}"; do
+  PLAT_RID=${SUPPORTED_RIDS[idx]}
+  DISAS_FILE=$ROOT_PATH/lib/resources/llvm/libllvm-disas${LLVM_DISAS_EXTS[$idx]}
+  if [[ ! -f "$DISAS_FILE" ]]; then
+    continue
+  fi
+  if ! $MULTIPLATFORM && [[ "$PLAT_RID" != "$RID" ]]; then
+    continue
+  fi
+  mkdir -p "$OUT_BIN_DIR/platform-lib/$PLAT_RID"
+  cp_u "$DISAS_FILE" "$OUT_BIN_DIR/platform-lib/$PLAT_RID/libllvm-disas.so"
+done
+
+# Build and copy UI
+if $UI; then
+  export WS_API_PATH="$ROOT_PATH/ws-api/ts"
+  pnpm -C "$WS_API_PATH" ci
+  pnpm -C "$WS_API_PATH" compile
+
+  NO_COLOR=true "$UI_PATH/scripts/build_neutralino.sh"
+  for idx in "${!SUPPORTED_RIDS[@]}"; do
+    PLAT_RID=${SUPPORTED_RIDS[idx]}
+    if ! $MULTIPLATFORM && [[ "$PLAT_RID" != "$RID" ]]; then
+      continue
+    fi
+    PLAT_UI_RID=${SUPPORTED_UI_RIDS[idx]}
+    BIN_EXT=""
+    if [[ "$PLAT_RID" == win* ]]; then
+      BIN_EXT=".exe"
+    fi
+
+    mkdir -p "$OUT_BIN_DIR/platform-lib/$PLAT_RID"
+    cp_u "$UI_PATH/neutralino/dist/renode-ui/renode-ui-$PLAT_UI_RID$BIN_EXT" "$OUT_BIN_DIR/platform-lib/$PLAT_RID/renode-ui$BIN_EXT"
+  done
+fi
+
+if $SHARED
+then
+    echo "Building DNNE package..."
+    dotnet build "$(get_path "$ROOT_PATH/tools/NativeInterface/third-party/DNNE/src/create_package.proj")" -c "$CONFIGURATION"
+
+    if [ $RID = linux-x64 ]; then
+      # Build a stub `libdl.so` library with `ld*` functions used in librenode using a versions map compatible with GLIBC versions older than 2.34.
+      # Otherwise, `librenode.so` built with newer GLIBC can't be used with older GLIBC because `dl*` functions are expected to be in `libc.so.6`.
+      # The trick with wrappers and explicit function versions used in tlib isn't applicable here because the functions can't be found even after
+      # forcing the linker to treat `libdl.so` as required.
+      LIBDL_STUB_SRC="$ROOT_PATH/tools/NativeInterface/csharp/libdl-linux-x64-stub"
+      LIBDL_STUB_PATH="$OUT_BIN_DIR/libdl.so.2"
+      gcc -shared -fPIC -Wl,--version-script="$LIBDL_STUB_SRC/libdl.map" -Wl,-soname,libdl.so.2 -o "$LIBDL_STUB_PATH" "$LIBDL_STUB_SRC/stub.c"
+
+      EXTRA_ARGUMENTS="-p:LibdlStubPath=$LIBDL_STUB_PATH"
+    fi
+
+    echo "Building librenode..."
+    dotnet build "$(get_path "$ROOT_PATH/tools/NativeInterface/csharp/NativeInterface.csproj")" -c "$CONFIGURATION" -f "$TFM" -p:PlatformOutputDir="$OUT_BIN_DIR/platform-lib/$RID" ${EXTRA_ARGUMENTS:-}
+    copy_native_interface_runtime_config "$OUT_BIN_DIR" "$OUT_BIN_DIR/platform-lib/$RID"
+
+    if [ $RID = linux-x64 ]; then
+      # See above why this stub was needed, it shouldn't be used at runtime.
+      rm $LIBDL_STUB_PATH
+    fi
 fi
 
 # build packages after successful compilation
@@ -533,18 +654,6 @@ then
     params="$params -d"
 fi
 
-if [ -n "$EXPORT_DIRECTORY" ]
-then
-    if [ "${DETECTED_OS}" != "linux" ]
-    then
-        echo "Custom output directory is currently available on Linux only"
-        exit 1
-    fi
-
-    $ROOT_PATH/tools/packaging/export_${DETECTED_OS}_workdir.sh $EXPORT_DIRECTORY $params
-    echo "Renode built to $EXPORT_DIRECTORY"
-fi
-
 if $NIGHTLY
 then
     params="$params -n"
@@ -552,63 +661,84 @@ fi
 
 if $SOURCE_PACKAGE
 then
-    if $NET && $ON_LINUX
+    if $ON_LINUX
     then
-        # Source package bundles nuget dependencies required for building the dotnet version of Renode
-        # so it can only be built when using dotnet. The generated package can also be used with Mono/.NETFramework
+        # Source package bundles nuget dependencies required for building Renode
         # Source packages are best built first, so it does not have to copy and then delete the packages from the `output` directory
         $ROOT_PATH/tools/packaging/make_source_package.sh $params
     else
-        echo "Source package can only be built using .NET on Linux. Exiting!"
+        echo "Source package can only be built on Linux. Exiting!"
         exit 1
     fi
 fi
 
+OG_TFM="$TFM"
+# `dotnet publish` is all-or-nothing in terms of TFM - we can't have mixed net8.0 for normal code and net8.0-windows10 for WPF
+if $PACKAGES || $PORTABLE; then
+  if $ON_WINDOWS && ! $HEADLESS; then
+    # For Windows (since we have to actually build Xwt.WPF), we switch the whole build to a Windows-only TFM and make Renode actually require WPF
+    TFM="$TFM-windows10.0.17763.0"
+    generate_build_target
+    PARAMS+=(p:RequireWPF=true)
+  elif ! $ON_WINDOWS; then
+    # For non-Windows, we have modified `Xwt.WPF.csproj` to remove their dependency on WPF if `RemoveWPF` is set
+    PARAMS+=(p:RemoveWPF=true)
+  fi
+fi
+
 if $PACKAGES
 then
-    if $NET
+    if $ON_LINUX
     then
-        # dotnet package on linux uses a separate script
-        if $ON_LINUX
-        then
-            # maxcpucount:1 to avoid an error with multithreaded publish
-            eval "dotnet publish -maxcpucount:1 -f $TFM --self-contained false $(build_args_helper "${PARAMS[@]}") $TARGET"
-            export RID TFM
-            $ROOT_PATH/tools/packaging/make_linux_dotnet_package.sh $params
-        elif $ON_WINDOWS
-        then
-            # No Non portable dotnet package on windows yet
-            echo "Only portable dotnet packages are supported on windows. Rerun build.sh with -t flag to build portable"
-            exit 1
-        elif $ON_OSX
-        then
-            # No Non portable dotnet package on macOS
-            echo "Only portable dotnet packages are supported on macOS. Rerun build.sh with -t flag to build portable"
-            exit 1
-        fi
-    else
-        $ROOT_PATH/tools/packaging/make_${DETECTED_OS}_packages.sh $params
+        export RID TFM
+        $ROOT_PATH/tools/packaging/make_linux_package.sh $params
+    elif $ON_WINDOWS
+    then
+        # No Non portable dotnet package on windows yet
+        echo "Only portable dotnet packages are supported on windows. Rerun build.sh with -t flag to build portable"
+        exit 1
+    elif $ON_OSX
+    then
+        # No Non portable dotnet package on macOS
+        echo "Only portable dotnet packages are supported on macOS. Rerun build.sh with -t flag to build portable"
+        exit 1
     fi
+fi
+
+if $MULTIPLATFORM
+then
+  $ROOT_PATH/tools/packaging/make_multi_package.sh $params
 fi
 
 if $PORTABLE
 then
-    PARAMS+=(p:PORTABLE=true)
-    if $NET
-    then
-        # maxcpucount:1 to avoid an error with multithreaded publish
-        echo "RID = $RID"
-        eval "dotnet publish -maxcpucount:1 -r $RID -f $TFM --self-contained true $(build_args_helper "${PARAMS[@]}") $TARGET"
-        export RID TFM
-        $ROOT_PATH/tools/packaging/make_${DETECTED_OS}_portable_dotnet.sh $params
-    else
-        if $ON_LINUX
-        then
-            $ROOT_PATH/tools/packaging/make_linux_portable.sh $params
+    PUBLISH_PARAMS=()
+    # The solution "Any CPU" platform is mapped to "AnyCPU" for projects.
+    # Publishing Renode.csproj directly bypasses that mapping, so without
+    # normalizing it here, conditional settings in projects such as Xwt.Gtk
+    # would be skipped.
+    for p in "${PARAMS[@]}"; do
+        if [[ "$p" == p:Platform=* ]]; then
+            PUBLISH_PARAMS+=(p:Platform=AnyCPU)
         else
-            echo "Portable packages for Mono are only available on Linux. Exiting!"
-            exit 1
+            PUBLISH_PARAMS+=("$p")
         fi
-    fi
+    done
+    PUBLISH_PARAMS+=(p:PORTABLE=true)
+    PUBLISH_PARAMS+=(p:SatelliteResourceLanguages=en)
+    # maxcpucount:1 to avoid an error with multithreaded publish
+    echo "RID = $RID"
+    PUBLISH_OUTPUT="$OUTPUT_DIRECTORY/publish/$CONFIGURATION/$RID"
+    # dotnet publish does not remove files left by a previous variant. In
+    # particular, a normal build followed by a headless one can otherwise
+    # retain GUI assemblies in the headless package.
+    rm -rf "$PUBLISH_OUTPUT"
+    dotnet publish -maxcpucount:1 -r $RID -f $TFM "${PUBLISH_PARAMS[@]/#/-}" --output "$PUBLISH_OUTPUT" "$(get_path "$PWD/src/Renode/Renode.csproj")"
+    # Prepare for use with NativeInterface even if SHARED is not enabled as this is just one file and it means that librenode can be added later
+    prepare_portable_native_interface_runtime "$PUBLISH_OUTPUT" "$OUT_BIN_DIR"
+    export RID TFM
+    $ROOT_PATH/tools/packaging/make_${DETECTED_OS}_portable.sh $params
 fi
 
+TFM="$OG_TFM"
+generate_build_target

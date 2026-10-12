@@ -13,12 +13,17 @@ def mc_uart_connect(device):
         print("Peripheral %s is not an IUART." % device_name)
         return 1
 
-    print("Redirecting the input to %s, press <ESC> to quit..." % device_name)
+    print("Redirecting the input to %s, press <ESC> TWICE to quit..." % device_name)
     uart.CharReceived += __printer
+    prev_char_esc = False
     while True:
        c = sys.stdin.read(1)
        if ord(c) == 27:
-           break
+           if prev_char_esc:
+               break
+           prev_char_esc = True
+       else:
+           prev_char_esc = False
        uart.WriteChar(ord(c))
     uart.CharReceived -= __printer
     print("Disconnected from %s" % device_name)
@@ -85,6 +90,28 @@ def mc_if(condition, cmd):
     if condition:
         for line in cmd.splitlines():
             monitor.Parse(line)
+
+def mc_str_contains(a, b):
+        print a.lower() in b.lower()
+
+def mc_print(*fmt, **kwargs):
+    logLevels = {
+        -1: LogLevel.Noisy,
+        0: LogLevel.Debug,
+        1: LogLevel.Info,
+        2: LogLevel.Warning,
+        3: LogLevel.Error,
+    }
+    sep = ' '
+    if 'sep' in kwargs:
+        sep = kwargs['sep']
+    if 'log' in kwargs and kwargs['log'] in logLevels:
+        Renode.Logging.Logger.Log(logLevels[kwargs['log']], sep.join(map(str, fmt)))
+    else:
+        print sep.join(map(str, fmt))
+
+def mc_pyprint(script):
+    print eval(script)
 
 externals = type('ExternalsManagerAccessor', (object,), dict(
     __getitem__ = lambda _, name: Renode.Core.Structure.IHasChildren[Renode.Core.IExternal].TryGetByName(emulationManager.CurrentEmulation.ExternalsManager, name)[0],

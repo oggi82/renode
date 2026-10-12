@@ -13,6 +13,39 @@ radio: Wireless.EmberRadio @ {
     Rx -> nvic@10
     Tim -> nvic@11
 
+calibrationAdc: Python.PythonPeripheral @ sysbus 0x40007000
+    size: 0x8
+    initable: true
+    script: '''
+# Relevant channels:
+# 0x0 - Vdd / 4
+# 0x1 - 1.8V / 2
+# 0x3 - Gnd
+# 0x9 - "atest_a" - antenna test
+if request.IsInit:
+    channel = 0x3
+    atest_a_value = 0x20061009
+if request.Offset == 0x4 and request.IsWrite: # Configuration
+    new_channel = (request.Value >> 7) & 0xf
+    if new_channel in (0x0, 0x1, 0x3, 0x9):
+        channel = new_channel
+    else:
+        self.WarningLog("Unsupported ADC channel 0x{0:X}", new_channel)
+elif request.Offset == 0x0 and not request.IsWrite: # Value
+    if channel == 0x0:
+        request.Value = 3300 / 4
+    elif channel == 0x1:
+        request.Value = 1800 / 2
+    elif channel == 0x3:
+        request.Value = 0
+    else:
+        request.Value = atest_a_value
+        # Use a linear congurental generator to get the next value. The HAL (not open source) expects a non-obvious pattern for this channel, and this gets past initialisation
+        atest_a_value = (0x8088405 * atest_a_value + 1) & 0xffffffff
+else:
+    self.WarningLog("Unhandled access to offset 0x{0:X}", request.Offset)
+'''
+
 timer1: Timers.STM32_Timer @ sysbus <0x4000E000, +0x1000>
     frequency: 10000000
     initialLimit: 0xFFFF
@@ -47,5 +80,6 @@ cpu: CPU.CortexM @ sysbus
 
 sysbus:
     init:
+        Tag <0x40004014 +4> "CLK_PERIOD" 0x123456 // Arbitrary non-zero value
         ApplySVD @https://dl.antmicro.com/projects/renode/svd/STM32W108.svd.gz
 

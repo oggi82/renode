@@ -1,5 +1,5 @@
 *** Settings ***
-Test Tags                           skip_windows  basic-tests
+Test Tags                           exclude_windows  basic-tests
 
 *** Keywords ***
 Create Platform
@@ -57,6 +57,7 @@ Should Return Syntax Error
 
 Should Abort On Runtime Error
     Create Platform
+    Set Crash On Abort              False
     Create Log Tester               1
 
     Execute Command                 logLevel -1 cpu

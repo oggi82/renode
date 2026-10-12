@@ -1,6 +1,4 @@
 @echo off
-REM We change the below line to "set CONTEXT=package" during package generation
-set "CONTEXT=source"
 set "SCRIPTDIR=%~dp0"
 
 :args
@@ -12,13 +10,13 @@ shift
 goto args
 :args_end
 
+set "CWD=%cd%"
+if "%CWD:~-1%"=="\" set "CWD=%CWD%."
+
 set "BINDIR=%SCRIPTDIR%\output\bin\Release"
 if "%DEBUG%" == "1" (
     set "BINDIR=%SCRIPTDIR%\output\bin\Debug"
 )
 
-if "%CONTEXT%" == "source" (
-    py -3 "%SCRIPTDIR%\tests\run_tests.py" --css-file "%SCRIPTDIR%\lib\resources\styles\robot.css" --exclude "skip_windows" --robot-framework-remote-server-full-directory "%BINDIR%" -r %cd% %*
-) else (
-    py -3 "%SCRIPTDIR%\..\tests\run_tests.py" --css-file "%SCRIPTDIR%\..\tests\robot.css" --exclude "skip_windows" --robot-framework-remote-server-full-directory "%SCRIPTDIR%\" -r "%cd%" %*
-)
+REM The user is responsible for preaparing an appropriate runtime environment.
+python "%SCRIPTDIR%\tests\run_tests.py" --css-file "%SCRIPTDIR%\lib\resources\styles\robot.css" --exclude "exclude_windows" --skip "skip_windows" --robot-framework-remote-server-full-directory "%BINDIR%" -r "%CWD%" %*

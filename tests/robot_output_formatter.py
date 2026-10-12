@@ -1,5 +1,7 @@
 import time
 
+from tests_engine import TestTag
+
 
 class term_color:
     BLUE = '\033[94m'
@@ -43,9 +45,13 @@ def end_test(data, result):
     if result.passed:
         status = term_color.GREEN + 'OK' + term_color.RESET
     else:
-        if result.skipped:
+        if TestTag.RETRIED_ATTEMPT in result.tags:
+            status = term_color.YELLOW + 'failed (will be retried)' + term_color.RESET
+        elif TestTag.UNSTABLE in result.tags:
+            status = term_color.BLUE + 'failed (known-unstable)' + term_color.RESET
+        elif result.skipped:
             status = term_color.BLUE + 'skipped' + term_color.RESET
-        elif 'non_critical' in result.tags:
+        elif TestTag.NON_CRITICAL in result.tags:
             status = term_color.YELLOW + 'failed (non critical)' + term_color.RESET
         else:
             status = term_color.RED + 'failed' + term_color.RESET

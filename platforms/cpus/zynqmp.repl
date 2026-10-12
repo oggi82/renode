@@ -63,7 +63,7 @@ apuGic: IRQControllers.ARM_GenericInterruptController @ {
         sysbus new Bus.BusMultiRegistration { address: 0xf9010000; size: 0x010000; region: "distributor" };
         sysbus new Bus.BusMultiRegistration { address: 0xf9020000; size: 0x010000; region: "cpuInterface" }
     }
-    architectureVersion: IRQControllers.ARM_GenericInterruptControllerVersion.GICv2
+    architectureVersion: .GICv2
     // GIC -> ARM CPU interrupt connections are generated automatically
 
 // RPU
@@ -94,7 +94,7 @@ rpuGic: IRQControllers.ARM_GenericInterruptController @ {
         sysbus new Bus.BusMultiRegistration { address: 0xf9000000; size: 0x1000; region: "distributor" };
         sysbus new Bus.BusMultiRegistration { address: 0xf9001000; size: 0x100; region: "cpuInterface" }
     }
-    architectureVersion: IRQControllers.ARM_GenericInterruptControllerVersion.GICv1
+    architectureVersion: .GICv1
     // GIC -> ARM CPU interrupt connections are generated automatically
 
 // MEMORY
@@ -129,7 +129,8 @@ btcm1: Memory.MappedMemory @ {
     size: 0x10000
 
 ddrLowApu: Memory.MappedMemory @ {
-        sysbus new Bus.BusPointRegistration { address: 0x0; cluster: cluster0 }
+        sysbus new Bus.BusPointRegistration { address: 0x0; cluster: cluster0 };
+        sysbus new Bus.BusPointRegistration { address: 0x0; condition: "initiator == gem0 || initiator == gem1 || initiator == gem2 || initiator == gem3 || initiator == gdma || initiator == adma" }
     }
     size: 0x30000
 
@@ -143,7 +144,8 @@ ocm: Memory.MappedMemory @ sysbus 0xfffc0000
     size: 0x40000
 
 ddrHigh: Memory.MappedMemory @ {
-        sysbus new Bus.BusPointRegistration { address: 0x800000000; cluster: cluster0 }
+        sysbus new Bus.BusPointRegistration { address: 0x800000000; cluster: cluster0 };
+        sysbus new Bus.BusPointRegistration { address: 0x800000000; condition: "initiator == gem0 || initiator == gem1 || initiator == gem2 || initiator == gem3 || initiator == gdma || initiator == adma" }
     }
     size: 0x80000000
 
@@ -151,6 +153,12 @@ rpu_control: Memory.MappedMemory @ sysbus 0xff9a0000
     size: 0x1000
 
 // I/O MAPPED PERIPHERALS
+
+gdma: DMA.ZynqMP_DMA @ sysbus 0xfd500000
+    [0-7] -> apuGic@[124-131]
+
+adma: DMA.ZynqMP_DMA @ sysbus 0xffa80000
+    [0-7] -> apuGic@[77-84]
 
 uart0: UART.Cadence_UART @ sysbus 0xff000000
     -> apuGic@21 | rpuGic@21
@@ -217,6 +225,7 @@ rtc: Timers.ZynqMP_RTC @ sysbus 0xffa60000
 platformManagementUnit: Miscellaneous.ZynqMP_PlatformManagementUnit @ ipi
     apus: [apu0, apu1, apu2, apu3]
     rpus: [rpu0, rpu1]
+    preservedOnAPUResets: [cluster1, ipi, pmu0, rpuGic]
 
 pmu0: Miscellaneous.ArmPerformanceMonitoringUnit @ rpu0
     -> rpuGic@5
@@ -298,14 +307,6 @@ sysbus:
         Tag <0x00fd4c0000 0x71c> "DPDMA"
         Tag <0x00fd4d0000 0x10> "WDT"
         Tag <0x00fd4f0000 0xfff0> "FPD_XMPU_SINK"
-        Tag <0x00fd500000 0x204> "GDMA_CH0"
-        Tag <0x00fd510000 0x204> "GDMA_CH1"
-        Tag <0x00fd520000 0x204> "GDMA_CH2"
-        Tag <0x00fd530000 0x204> "GDMA_CH3"
-        Tag <0x00fd540000 0x204> "GDMA_CH4"
-        Tag <0x00fd550000 0x204> "GDMA_CH5"
-        Tag <0x00fd560000 0x204> "GDMA_CH6"
-        Tag <0x00fd570000 0x204> "GDMA_CH7"
         Tag <0x00fd5c0000 0x98> "APU"
         Tag <0x00fd5d0000 0x200> "FPD_XMPU_CFG"
         Tag <0x00fd5e0000 0x44> "CCI_REG"

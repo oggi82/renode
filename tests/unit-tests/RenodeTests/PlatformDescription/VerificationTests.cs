@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -145,7 +145,6 @@ external: Antmicro.Renode.UnitTests.Mocks.MockCPU
 
             var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
             Assert.AreEqual(ParsingError.PropertyOrCtorNameUsedMoreThanOnce, exception.Error);
-
         }
 
         [Test]
@@ -229,7 +228,6 @@ receiver: Antmicro.Renode.UnitTests.Mocks.MockReceiver";
 
             var exception = Assert.Throws<ParsingException>(() => ProcessSource(source));
             Assert.AreEqual(ParsingError.WrongIrqArity, exception.Error);
-
         }
 
         [Test]
@@ -287,6 +285,7 @@ receiver: Antmicro.Renode.UnitTests.Mocks.MockReceiver";
             var source = @"
 receiver: Antmicro.Renode.UnitTests.Mocks.MockReceiver
 sender: Antmicro.Renode.UnitTests.Mocks.MockGPIOByNumberConnectorPeripheral
+    gpios: 2
     2 -> receiver@6
     [0, 1-3, 7] -> receiver@[5-9]";
 

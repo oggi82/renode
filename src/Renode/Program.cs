@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -7,8 +7,10 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 
+using Antmicro.Renode.Core;
 using Antmicro.Renode.Logging;
 using Antmicro.Renode.RobotFramework;
 using Antmicro.Renode.UI;
@@ -23,6 +25,16 @@ namespace Antmicro.Renode
         {
             AppDomain.CurrentDomain.ProcessExit += (_, __) => Emulator.Exit();
 
+            void SignalHandler(PosixSignalContext ctx)
+            {
+                ctx.Cancel = true;
+                Emulator.Exit();
+            }
+            var signal = RuntimeInfo.IsWindows() ? PosixSignal.SIGQUIT : PosixSignal.SIGINT;
+            using var signalHandler = PosixSignalRegistration.Create(signal, SignalHandler);
+            using var sigtermHandler = PosixSignalRegistration.Create(PosixSignal.SIGTERM, SignalHandler);
+            using var sighupHandler = PosixSignalRegistration.Create(PosixSignal.SIGHUP, SignalHandler);
+
             var options = new Options();
             var optionsParser = new OptionsParser.OptionsParser();
             var optionsParsed = optionsParser.Parse(options, args);
@@ -30,6 +42,12 @@ namespace Antmicro.Renode
             {
                 return;
             }
+
+            MainWithOptions(options);
+        }
+
+        public static void MainWithOptions(Options options)
+        {
             if(options.Version)
             {
                 Console.Out.WriteLine(LongVersionString);
@@ -37,7 +55,7 @@ namespace Antmicro.Renode
             }
             ConfigureEnvironment(options);
 
-            /* 
+            /*
                 We noticed that the static constructors' initialization chain breaks non-deterministically on some Mono versions crashing Renode with NullReferenceException.
                 In the current version, EmulationManager's static constructor calls TypeManager that in turn uses Logger; Logger however requires EmulationManager to be functional.
                 This circular dependency seems to be a problem.
@@ -45,7 +63,6 @@ namespace Antmicro.Renode
             */
             Core.EmulationManager.RebuildInstance();
 
-#if NET
             if(options.ServerMode)
             {
                 if(!WebSockets.WebSocketsManager.Instance.Start(options.ServerModePort))
@@ -57,32 +74,26 @@ namespace Antmicro.Renode
 
                 Emulator.BeforeExit += WebSockets.WebSocketsManager.Instance.Dispose;
             }
-#endif
 
             var thread = new Thread(() =>
             {
                 try
                 {
-                    if(optionsParsed)
+                    Antmicro.Renode.UI.CommandLineInterface.Run(options, (context) =>
                     {
-                        Antmicro.Renode.UI.CommandLineInterface.Run(options, (context) =>
+                        if(options.RobotFrameworkRemoteServerPort >= 0)
                         {
-                            if(options.RobotFrameworkRemoteServerPort >= 0)
-                            {
-                                var rf = new RobotFrameworkEngine();
-                                context.RegisterSurrogate(typeof(RobotFrameworkEngine), rf);
-                                rf.Start(options.RobotFrameworkRemoteServerPort);
-                            }
-#if NET
-                            if(options.ServerMode)
-                            {
-                                var wsAPI = new WebSockets.WebSocketAPI(options.ServerModeWorkDir);
-                                Emulator.BeforeExit += wsAPI.Dispose;
-                                wsAPI.Start();
-                            }
-#endif
-                        });
-                    }
+                            var rf = new RobotFrameworkEngine();
+                            context.RegisterSurrogate(typeof(RobotFrameworkEngine), rf);
+                            rf.Start(options.RobotFrameworkRemoteServerPort);
+                        }
+                        if(options.ServerMode)
+                        {
+                            var wsAPI = new WebSockets.WebSocketAPI(options.ServerModeWorkDir);
+                            Emulator.BeforeExit += wsAPI.Dispose;
+                            wsAPI.Start();
+                        }
+                    });
                 }
                 finally
                 {
@@ -97,18 +108,7 @@ namespace Antmicro.Renode
         {
             //Plain mode must be set before the window title
             ConsoleBackend.Instance.PlainMode = options.Plain;
-
-#if PLATFORM_WINDOWS || NET
             ConsoleBackend.Instance.WindowTitle = "Renode";
-#else
-            // On Mono (verified on v. 6.12.0.200) writing to `Console.Title`
-            // by multiple processes concurrently causes a deadlock. Do not set
-            // the window title if we're running tests on Mono to avoid that.
-            if(options.RobotFrameworkRemoteServerPort == -1)
-            {
-                ConsoleBackend.Instance.WindowTitle = "Renode";
-            }
-#endif
 
             string configFile = null;
 
@@ -139,20 +139,12 @@ namespace Antmicro.Renode
                 try
                 {
                     var name = entryAssembly == null ? "Unknown assembly name" : entryAssembly.GetName().Name;
-                    var version = entryAssembly == null ? ": Unknown version" : entryAssembly.GetName().Version.ToString();
-#if NET
-                    var runtime = ".NET";
-#elif PLATFORM_WINDOWS
-                    var runtime = ".NET Framework";
-#else
-                    var runtime = "Mono";
-#endif
-                    return string.Format("{0} v{1}\n  build: {2}\n  build type: {3}\n  runtime: {4} {5}",
+                    var version = entryAssembly == null ? ": Unknown version" : entryAssembly.GetName().Version.ToString(3);
+                    return string.Format("{0} v{1}\n  build: {2}\n  build type: {3}\n  runtime: .NET {4}",
                         name,
                         version,
                         ((AssemblyInformationalVersionAttribute)entryAssembly.GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)[0]).InformationalVersion,
                         ((AssemblyConfigurationAttribute)entryAssembly.GetCustomAttributes(typeof(AssemblyConfigurationAttribute), false)[0]).Configuration,
-                        runtime,
                         Environment.Version
                     );
                 }

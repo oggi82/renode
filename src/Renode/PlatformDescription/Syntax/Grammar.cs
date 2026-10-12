@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -111,17 +111,19 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public static readonly Parser<string> AsKeyword = MakeKeyword("as");
 
+        public static readonly Parser<string> PreinitKeyword = MakeKeyword("preinit");
+
         public static readonly Parser<string> InitKeyword = MakeKeyword("init");
 
         public static readonly Parser<string> ResetKeyword = MakeKeyword("reset");
 
         public static readonly Parser<string> LocalKeyword = MakeKeyword("local");
 
-        public static readonly Parser<string> PrefixedKeyword = MakeKeyword("prefixed");
-
         public static readonly Parser<bool> TrueKeyword = MakeKeyword("true", true);
+        public static readonly Parser<bool> TrueKeywordTitleCase = MakeKeyword("True", true);
 
         public static readonly Parser<bool> FalseKeyword = MakeKeyword("false", false);
+        public static readonly Parser<bool> FalseKeywordTitleCase = MakeKeyword("False", false);
 
         public static readonly Parser<Value> NoneKeyword = MakeKeyword("none", (Value)null);
 
@@ -153,12 +155,12 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
         public static readonly Parser<UsingEntry> Using =
             (from usingKeyword in UsingKeyword
              from filePath in SingleLineQuotedString.Select(x => new StringWithPosition(x)).Positioned()
-             from prefixedKeyword in PrefixedKeyword.Then(x => SingleLineQuotedString).Named("using prefix").Optional()
-             select new UsingEntry(filePath, prefixedKeyword.GetOrDefault())).Token().Positioned().Named("using entry");
+             from separator in Separator.AtLeastOnce().XOptional()
+             select new UsingEntry(filePath)).Token().Positioned().Named("using entry");
 
         public static readonly Parser<IEnumerable<UsingEntry>> Usings =
             (from firstUsing in Using
-             from rest in Separator.Then(x => Using).Many()
+             from rest in Using.Many()
              select new[] { firstUsing }.Concat(rest));
 
         public static readonly Parser<RangeValue> Range =
@@ -170,10 +172,17 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
              from closing in ClosingChevron
              select new RangeValue(begin, end)).Named("range");
 
-        public static readonly Parser<EnumValue> Enum =
+        public static readonly Parser<EnumValue> EnumFull =
             (from firstElement in Identifier
              from rest in Parse.Char('.').Then(x => Identifier).XAtLeastOnce()
              select new EnumValue(new[] { firstElement }.Concat(rest))).Named("enum");
+
+        public static readonly Parser<EnumValue> EnumShorthand =
+            (from dot in Parse.Char('.')
+             from id in Identifier
+             select new EnumValue(id));
+
+        public static readonly Parser<EnumValue> Enum = EnumFull.XOr(EnumShorthand);
 
         public static readonly Parser<ObjectValue> ObjectValue =
             (from newKeyword in NewKeyword
@@ -184,7 +193,11 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
         public static readonly Parser<ReferenceValue> ReferenceValue = Identifier.Select(x => new ReferenceValue(x)).Named("reference");
 
         public static readonly Parser<BoolValue> BoolValue =
-            TrueKeyword.Or(FalseKeyword).Select(x => new BoolValue(x)).Named("bool");
+            TrueKeyword
+            .Or(TrueKeywordTitleCase)
+            .Or(FalseKeyword)
+            .Or(FalseKeywordTitleCase)
+            .Select(x => new BoolValue(x)).Named("bool");
 
         public static readonly Parser<ListValue> EmptyList =
             (from opening in OpeningSquareBracket
@@ -193,26 +206,44 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public static readonly Parser<ListValue> NonEmptyList =
             (from opening in OpeningSquareBracket
-             from values in Value.DelimitedBy(Comma)
+             from values in Value.Or(EmptyKeyword).DelimitedBy(Comma)
              from trailing in Comma.Optional()
              from closing in ClosingSquareBracket
              select new ListValue(values));
 
         public static readonly Parser<ListValue> ListValue = NonEmptyList.Or(EmptyList);
 
-        public static readonly Parser<Value> Value = (SingleLineQuotedString.Or(MultilineQuotedString)).Select(x => new StringValue(x))
-                                                                 .XOr<Value>(Range)
-                                                                 .XOr(Number.Select(x => new NumericalValue(x)))
-                                                                 .XOr(ObjectValue)
-                                                                 .XOr(ListValue)
-                                                                 .Or(Enum)
-                                                                 .Or(BoolValue)
-                                                                 .Or(ReferenceValue)
-                                                                 .Positioned();
+        public static readonly Parser<Value> ScalarValue = (SingleLineQuotedString.Or(MultilineQuotedString)).Select(x => new StringValue(x))
+                                                            .XOr<Value>(Range)
+                                                            .XOr(Number.Select(x => new NumericalValue(x)))
+                                                            .Or(Enum)
+                                                            .Or(BoolValue)
+                                                            .Or(ReferenceValue)
+                                                            .Positioned();
+
+        public static readonly Parser<KeyValuePair> KeyValuePair =
+            (from key in ScalarValue.Named("dictionary key")
+             from colon in Colon
+             from value in Value.Named("dictionary value")
+             select new KeyValuePair(key, value)).Named("dictionary entry");
+
+        public static readonly Parser<DictValue> DictValue =
+            (from opening in OpeningBrace.Named("start of dictionary")
+             from pairs in KeyValuePair.DelimitedBy(Separator).XOptional()
+             from trailing in Separator.Optional()
+             from closing in ClosingBrace.Named("end of dictionary")
+             select new DictValue(pairs.GetOrDefault())).Named("dictionary");
+
+        public static readonly Parser<Value> NonDictValue = ScalarValue
+                                                            .XOr(ObjectValue)
+                                                            .XOr(ListValue)
+                                                            .Positioned();
+
+        public static readonly Parser<Value> Value = NonDictValue.XOr(DictValue).Positioned();
 
         public static readonly Parser<RegistrationInfo> RegistrationInfoInner =
             (from register in ReferenceValue.Named("register reference").Positioned()
-             from registrationPoint in Value.XOptional().Named("registration point")
+             from registrationPoint in NonDictValue.XOptional().Named("registration point")
              select new RegistrationInfo(register, registrationPoint.GetOrDefault())).Named("registration info");
 
         public static readonly Parser<RegistrationInfo> RegistrationInfo = AtSign.Then(x => RegistrationInfoInner);
@@ -226,7 +257,8 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
             (from atSign in AtSign
              from brace in OpeningBrace.Named("registration infos list")
              from first in RegistrationInfoInner
-             from rest in Separator.Then(x => RegistrationInfoInner).XMany()
+             from rest in Separator.Then(x => RegistrationInfoInner).Many()
+             from tail in Separator.Optional()
              from closingBrace in ClosingBrace.Named("registration infos list end")
              select new[] { first }.Concat(rest));
 
@@ -249,25 +281,32 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
             (from elements in MonitorStatementElement.Many()
              select elements.Aggregate((x, y) => x + y)).Token().Named("monitor statement");
 
-        public static readonly Parser<IEnumerable<string>> MonitorStatements =
-            (from openingBrace in OpeningBrace.Named("init statement list")
+        public static Parser<IEnumerable<string>> MonitorStatements(string name) =>
+            (from openingBrace in OpeningBrace.Named($"{name} statement list")
              from firstLine in MonitorStatement
              from rest in Separator.Then(x => MonitorStatement).XMany()
-             from closingBrace in ClosingBrace.Named("init statement list end")
+             from closingBrace in ClosingBrace.Named($"{name} statement list end")
              select new[] { firstLine }.Concat(rest));
+
+        public static readonly Parser<PreinitAttribute> PreinitAttribute =
+            (from preinitKeyword in PreinitKeyword
+             from addSuffix in Identifier.Where(x => x == "add").Optional()
+             from colon in Colon
+             from preinitValue in MonitorStatements("preinit")
+             select new PreinitAttribute(preinitValue, !addSuffix.IsEmpty)).Named("preinit section");
 
         public static readonly Parser<InitAttribute> InitAttribute =
             (from initKeyword in InitKeyword
              from addSuffix in Identifier.Where(x => x == "add").Optional()
              from colon in Colon
-             from initValue in MonitorStatements
+             from initValue in MonitorStatements("init")
              select new InitAttribute(initValue, !addSuffix.IsEmpty)).Named("init section");
 
         public static readonly Parser<ResetAttribute> ResetAttribute =
             (from resetKeyword in ResetKeyword
              from addSuffix in Identifier.Where(x => x == "add").Optional()
              from colon in Colon
-             from resetValue in MonitorStatements
+             from resetValue in MonitorStatements("reset")
              select new ResetAttribute(resetValue, !addSuffix.IsEmpty)).Named("reset section");
 
         public static readonly Parser<IEnumerable<int>> IrqRange =
@@ -340,7 +379,7 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public static Parser<IrqReceiver> IrqReceiver =
             (from destinationName in ReferenceValue.Named("destination peripheral reference")
-             from localIndex in Parse.Char('#').Then(x => Parse.Number.Select(y => (int?)int.Parse(y))).Named("local index").XOptional()
+             from localIndex in Parse.Char('#').Then(x => HexadecimalInt.Or(DecimalInt)).Select(y => (int?)y).Named("local index").XOptional()
              select new IrqReceiver(destinationName, localIndex.GetOrDefault())).Positioned();
 
         public static readonly Parser<IrqDestinations> SimpleDestination =
@@ -370,12 +409,13 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
              select new IrqAttribute(sources, new[] { destination }.Concat(rest)));
 
         public static readonly Parser<IrqAttribute> NoneIrqAttribute =
-            (from source in GetIrqEnd(true).Select(x => new[] { x }).Optional()
+            (from source in (GetIrqEnd(true).Select(x => new[] { x }).Or(GetIrqEnds(true))).Optional()
              from arrow in RightArrow
              from noneKeyword in NoneKeyword
              select new IrqAttribute(source.GetOrDefault(), new[] { new IrqDestinations(null, null) }));
 
-        public static readonly Parser<Attribute> Attribute = InitAttribute
+        public static readonly Parser<Attribute> Attribute = PreinitAttribute
+            .Or<Attribute>(InitAttribute)
             .Or<Attribute>(ResetAttribute)
             .Or<Attribute>(ConstructorOrPropertyAttribute)
             .Or(NoneIrqAttribute)
@@ -385,7 +425,8 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public static readonly Parser<IEnumerable<Attribute>> AttributesInner =
             (from firstAttribute in Attribute
-             from rest in Separator.Then(x => Attribute).XMany()
+             from rest in Separator.Then(x => Attribute).Many()
+             from tail in Separator.Optional()
              select new[] { firstAttribute }.Concat(rest));
 
         public static readonly Parser<IEnumerable<Attribute>> Attributes =

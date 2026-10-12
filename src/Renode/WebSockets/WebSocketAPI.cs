@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -29,6 +29,7 @@ namespace Antmicro.Renode.WebSockets
             isDisposed = false;
             isRunning = false;
             workingDirName = workingDir;
+            streamProxy = new WebSocketStreamProxy();
 
             actionHandlers = new Dictionary<string, (IWebSocketAPIProvider, List<ActionHandler>)>();
             apiProviders = new List<IWebSocketAPIProvider>();
@@ -68,6 +69,8 @@ namespace Antmicro.Renode.WebSockets
                 }
             }
 
+            streamProxy.Start();
+
             isRunning = true;
             return true;
         }
@@ -78,6 +81,8 @@ namespace Antmicro.Renode.WebSockets
             {
                 return;
             }
+
+            streamProxy.Dispose();
 
             isDisposed = true;
             webSocketServerProvider.Dispose();
@@ -120,7 +125,6 @@ namespace Antmicro.Renode.WebSockets
         {
             EmulationManager.Instance.Clear();
             Recorder.Instance.ClearEvents();
-            SharedData.SetDefaults();
         }
 
         private void RegisterType(Type t)
@@ -130,7 +134,7 @@ namespace Antmicro.Renode.WebSockets
                 return;
             }
 
-            Logger.Log(LogLevel.Info, $"Found new API Provider: {t.Name}");
+            Logger.Log(LogLevel.Debug, $"Found new API Provider: {t.Name}");
             IWebSocketAPIProvider apiProviderInstance = (IWebSocketAPIProvider)Activator.CreateInstance(t);
             apiProviders.Add(apiProviderInstance);
 
@@ -158,7 +162,7 @@ namespace Antmicro.Renode.WebSockets
                     continue;
                 }
 
-                Logger.Log(LogLevel.Info, $"- Registered action handler: {methodAttr.Method.Name} for: {methodAttr.Attribute.Name}");
+                Logger.Log(LogLevel.Debug, $"- Registered action handler: {methodAttr.Method.Name} for: {methodAttr.Attribute.Name}");
                 handlerList.Add(new ActionHandler
                 {
                     Action = methodAttr.Method,
@@ -179,7 +183,7 @@ namespace Antmicro.Renode.WebSockets
                 WebSocketAPIEventHandler eventHandler = (object data) => this.HandleEvents(eventAttr.Version.ToString(), eventAttr.Name, data);
 
                 delegateField.SetValue(apiProviderInstance, eventHandler);
-                Logger.Log(LogLevel.Info, $"- Registered event handler: {delegateField.Name} for: {eventAttr.Name}");
+                Logger.Log(LogLevel.Debug, $"- Registered event handler: {delegateField.Name} for: {eventAttr.Name}");
             }
         }
 
@@ -203,9 +207,10 @@ namespace Antmicro.Renode.WebSockets
             {
                 apiRequest = JsonConvert.DeserializeObject<APIRequest>(request);
             }
-            catch(Exception)
+            catch(Exception ex)
             {
                 SendErrorMessage(DefaultVersion, -1);
+                Logger.Log(LogLevel.Error, "Failed to parse request: {0}", ex);
                 return;
             }
 
@@ -228,12 +233,13 @@ namespace Antmicro.Renode.WebSockets
                 {
                     foreach(var param in handlerParams)
                     {
-                        callArgs[arg] = apiRequest.Payload[param.Name].ToObject(param.ParameterType);
+                        callArgs[arg] = apiRequest.Payload[param.Name]?.ToObject(param.ParameterType);
                         arg++;
                     }
                 }
-                catch(Exception)
+                catch(Exception ex)
                 {
+                    Logger.Log(LogLevel.Error, "Failed to prepare request arguments: {0}", ex);
                     SendErrorMessage(apiRequest.Version.ToString(), apiRequest.Id);
                     return;
                 }
@@ -295,6 +301,7 @@ namespace Antmicro.Renode.WebSockets
         private readonly object locker;
         private readonly Dictionary<string, (IWebSocketAPIProvider handlerInstance, List<ActionHandler> entries)> actionHandlers;
         private readonly List<IWebSocketAPIProvider> apiProviders;
+        private readonly WebSocketStreamProxy streamProxy;
         private static readonly string DefaultVersion = "1.5.0";
 
         private class APIRequest

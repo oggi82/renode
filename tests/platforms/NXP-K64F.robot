@@ -30,7 +30,7 @@ Should Run Zephyr Tests for UART
 
 Should Run Zephyr Tests for TCP
     [Documentation]           Runs Zephyr's tests from tests/net/tcp
-    Create Machine            nxp_k64f--zephyr_net_tcp.elf-s_1591188-15ce42eb41454d94762cc6bde77bc61f22dfcb26
+    Create Machine            zephyr-frdm_k64f-test-net-tcp-simple.elf-s_3198764-62e4449d27377b47e885c185ea6af673889434cd
 
     Start Emulation
     Wait For Line On Uart     PROJECT EXECUTION SUCCESSFUL

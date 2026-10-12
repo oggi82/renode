@@ -1,0 +1,608 @@
+//
+// Copyright (c) 2010-2026 Antmicro
+//
+// This file is licensed under the MIT License.
+// Full license text is available in 'licenses/MIT.txt'.
+//
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+
+using Antmicro.Renode.Core;
+using Antmicro.Renode.Debugging;
+using Antmicro.Renode.Exceptions;
+using Antmicro.Renode.Logging;
+using Antmicro.Renode.Network.ExternalControl;
+using Antmicro.Renode.Peripherals;
+using Antmicro.Renode.Time;
+using Antmicro.Renode.Utilities;
+
+namespace Antmicro.Renode.Network
+{
+    public static class ExternalControlServerExtensions
+    {
+        public static void CreateExternalControlServer(this Emulation emulation, string name, int port)
+        {
+            emulation.ExternalsManager.AddExternal(new ExternalControlSocket(port, isClient: false), name, earlyDisposable: false);
+        }
+
+        public static void CreateExternalControlClient(this Emulation emulation, string name, int port)
+        {
+            emulation.ExternalsManager.AddExternal(new ExternalControlClient(port), name, earlyDisposable: false);
+        }
+    }
+
+    public class ExternalControlSocket : IDisposable, IExternal, IEmulationElement
+    {
+        public ExternalControlSocket(int port, bool isClient)
+        {
+            this.isClient = isClient;
+            this.port = port;
+            StartConnection();
+        }
+
+        public void WaitForClientConnection(uint timeoutInSeconds)
+        {
+            if(!clientConnectionEvent.WaitOne((int)timeoutInSeconds * 1000))
+            {
+                throw new RecoverableException("No client connected in the selected time window!");
+            }
+        }
+
+        public void SynchronizeTimeWithExternal()
+        {
+            RegisterTimeElapsedCallback((timeStamp) => EmulationManager.Instance.CurrentEmulation.RunUntil(timeStamp.TimeElapsed));
+        }
+
+        public void RegisterTimeElapsedCallback(Action<TimeStamp> callback)
+        {
+            var command = (TimeElapsedCallbackCommand)commandHandlers.GetHandler(Command.TimeElapsedCallback);
+            command.RegisterExternalCallback(callback);
+        }
+
+        public void ConnectExternalGPIOOutput(IGPIOReceiver gpioReceiver, int pinId, string externalMachine, string externalGPIO, int externalPinId)
+        {
+            var machine = gpioReceiver.GetMachine();
+            RegisterExternalGPIOChangeCallback(externalMachine, externalGPIO, externalPinId, (externalEventTimestamp, state) =>
+            {
+                machine.HandleTimeDomainEvent(gpioReceiver.OnGPIO, pinId, state, externalEventTimestamp);
+            });
+        }
+
+        public void RegisterExternalGPIOChangeCallback(string externalMachine, string externalGPIO, int externalPinId, Action<TimeStamp, bool> callback)
+        {
+            var machineId = ((GetMachine)GetCommandHandler(Command.GetMachine)).GetExternalMachineId(externalMachine);
+            var command = (GPIOPort)GetCommandHandler(Command.GPIOPort);
+            command.RegisterExternalCallback(machineId, externalGPIO, externalPinId, callback);
+        }
+
+        public void AttachCustomCommandCallbackToMonitor()
+        {
+            var command = (CustomCommand)commandHandlers.GetHandler(Command.CustomCommand);
+            command.RegisterExternalCallback();
+        }
+
+        public void RegisterRemoteBusPeripheral(string localMachineName, string remoteMachineName, string remotePeripheralName, SystemBus.AccessWidth accessWidth, SystemBus.AccessType accessType, string localContextName = null)
+        {
+            try
+            {
+                if(!EmulationManager.Instance.CurrentEmulation.TryGetMachineByName(localMachineName, out var machine))
+                {
+                    throw new RecoverableException($"No machine with name: {localMachineName} was found");
+                }
+
+                IPeripheral localContextPeripheral = null;
+                if(localContextName is not null && !machine.TryGetByName<IPeripheral>(localContextName, out localContextPeripheral))
+                {
+                    throw new RecoverableException($"No peripheral with name: {localContextName} was found");
+                }
+
+                var command = (SystemBus)commandHandlers.GetHandler(Command.SystemBus);
+
+                var response = this.SendRequest(MessagePayload.Request(Command.GetMachine, remoteMachineName));
+                response.LogOnError(command.Identifier, this);
+                if(response.Type != CommandType.Success)
+                {
+                    throw new RecoverableException($"Remote Renode doesn't have the machine named: {remoteMachineName}");
+                }
+                var remoteMachineId = BitConverter.ToInt32(response.Data);
+
+                // Sends a request to get remote peripheral id
+                response = SendRemoteRegisterRequest(remoteMachineId, remotePeripheralName);
+                if(response.Type != CommandType.Success)
+                {
+                    throw new RecoverableException($"Remote Renode doesn't have the peripheral named: {remotePeripheralName}");
+                }
+                var remotePeripheralId = BitConverter.ToInt32(response.Data);
+
+                command.RegisterRemoteCallback(remotePeripheralId, accessWidth, accessType, machine, localContextPeripheral);
+            }
+            catch(Exception e)
+            {
+                // catch any exception, log it, then forward to Monitor
+                this.ErrorLog("Failed to register remote callback: {0}", e.Message);
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            Disconnect();
+        }
+
+        public String SendCustomCommand(String command)
+        {
+            var customCommand = commandHandlers.GetHandler(Command.CustomCommand) as CustomCommand;
+            var timestamp = EmulationManager.Instance.CurrentEmulation.MasterTimeSource.ElapsedVirtualTime.TotalNanoseconds;
+            return customCommand.Send(command, timestamp);
+        }
+
+        public ICommand GetCommandHandler(Command command)
+        {
+            return commandHandlers.GetHandler(command);
+        }
+
+        public MessagePayload SendRequest(MessagePayload request)
+        {
+            var handler = GetHandlerForCurrentThread();
+            var cancelationToken = disposeCancelationTokenSource?.Token;
+
+            if(cancelationToken is null || handler is null)
+            {
+                throw new ConnectionDisposedException();
+            }
+
+            try
+            {
+                // External handler is used only by Default Thread Handler
+                if(handler != externalHandler)
+                {
+                    Monitor.Enter(handler);
+                }
+
+                var response = handler.SendRequest(request, cancelationToken.Value);
+                return response;
+            }
+            catch(OperationCanceledException)
+            {
+                throw new ConnectionDisposedException();
+            }
+            finally
+            {
+                if(handler != externalHandler)
+                {
+                    Monitor.Exit(handler);
+                }
+            }
+        }
+
+        public void SendMessage(Message message)
+        {
+            var bytes = message.ToBytes();
+            try
+            {
+                lock(socketLocker)
+                {
+                    if(communicationSocket is null)
+                    {
+                        throw new ConnectionDisposedException();
+                    }
+                    communicationSocket.Send(bytes.ToArray());
+                }
+            }
+            catch(ObjectDisposedException)
+            {
+                throw new ConnectionDisposedException();
+            }
+            catch(SocketException e)
+            {
+                Disconnect();
+                throw new ConnectionErrorException(e);
+            }
+            this.Log(LogLevel.Debug, "Message sent: {0}", message);
+        }
+
+        public IMachineContainer Machines { get; private set; }
+
+        private void InitializeHandlers()
+        {
+            lock(handlersLocker)
+            {
+                commandHandlers = new CommandHandlerCollection();
+                commandHandlers.Register(new TimeElapsedCallbackCommand(this));
+                commandHandlers.Register(new RunFor(this));
+                commandHandlers.Register(new GetTime(this));
+                commandHandlers.Register(new SPI(this));
+                commandHandlers.Register(new ADC(this));
+                commandHandlers.Register(new GPIOPort(this));
+                commandHandlers.Register(new SystemBus(this));
+                commandHandlers.Register(new CheckVersion(this));
+                commandHandlers.Register(new CANBus(this));
+                commandHandlers.Register(new CustomCommand(this));
+
+                var getMachineHandler = new GetMachine(this);
+                Machines = getMachineHandler;
+
+                commandHandlers.Register(getMachineHandler);
+                disposeCancelationTokenSource = new();
+
+                externalHandler = new CommunicationHandler(isExternal: true, this);
+                internalHandler = new CommunicationHandler(isExternal: false, this);
+                defaultHandlerThread = new Thread(DefaultThreadHandlerBody)
+                {
+                    Name = GetType().Name + "_DefaultHandlerThread",
+                    IsBackground = true
+                };
+                defaultHandlerThread.Start(disposeCancelationTokenSource.Token);
+            }
+        }
+
+        private void DisposeHandlers()
+        {
+            lock(handlersLocker)
+            {
+                disposeCancelationTokenSource?.Cancel();
+                defaultHandlerThread?.Join();
+                internalHandler = null;
+                externalHandler = null;
+
+                commandHandlers?.Dispose();
+                commandHandlers = null;
+
+                disposeCancelationTokenSource?.Dispose();
+                disposeCancelationTokenSource = null;
+            }
+        }
+
+        private MessagePayload SendRemoteRegisterRequest(int remoteMachineId, string remotePeripheralName)
+        {
+            return this.SendRequest(MessagePayload.Request(Command.SystemBus, new RemoteBusRegistrationRequest(remoteMachineId, remotePeripheralName).GetRawBytes()));
+        }
+
+        private void StartConnection()
+        {
+            lock(socketLocker)
+            {
+                DebugHelper.Assert(communicationSocket == null);
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                socket.NoDelay = true;
+
+                try
+                {
+                    if(isClient)
+                    {
+                        this.Log(LogLevel.Info, "Connecting to a server on port: {0}", port);
+                        socket.Connect(new IPEndPoint(IPAddress.Loopback, port));
+
+                        communicationSocket = socket;
+                    }
+                    else
+                    {
+                        socket.Bind(new IPEndPoint(IPAddress.Any, port));
+                        socket.Listen(backlog: 1);
+
+                        listenerSocket = socket;
+                    }
+                }
+                catch(SocketException e)
+                {
+                    throw new RecoverableException(e);
+                }
+            }
+
+            InitializeHandlers();
+
+            lock(rxThreadLocker)
+            {
+                rxThread = new Thread(RxThreadBody)
+                {
+                    Name = GetType().Name + "_RxHandler",
+                    IsBackground = true
+                };
+                rxThread.Start();
+            }
+        }
+
+        private void Disconnect(bool allowReconnection = false)
+        {
+            clientConnectionEvent.Reset();
+
+            // Return early if state is already change or is disposed
+            // It prevents deadlocks on joining started threads
+            if(!TryChangeState(allowReconnection ? State.Unconnected : State.Disposed))
+            {
+                return;
+            }
+
+            CloseSocket(listenerSocket);
+            listenerSocket = null;
+
+            lock(socketLocker)
+            {
+                CloseSocket(communicationSocket);
+            }
+
+            lock(rxThreadLocker)
+            {
+                if(rxThread?.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
+                {
+                    rxThread?.Join();
+                }
+                rxThread = null;
+            }
+
+            lock(socketLocker)
+            {
+                communicationSocket = null;
+            }
+
+            DisposeHandlers();
+
+            if(allowReconnection)
+            {
+                StartConnection();
+            }
+        }
+
+        private void DefaultThreadHandlerBody(object obj)
+        {
+            var cancelationToken = (CancellationToken)obj;
+
+            try
+            {
+                var handler = GetHandlerForCurrentThread();
+                while(true)
+                {
+                    handler.HandleRequestsUntilResponse(cancelationToken);
+                }
+            }
+            catch(OperationCanceledException)
+            {
+                this.Log(LogLevel.Debug, "Default thread handler has been canceled, it is expected while disposing {0}", nameof(ExternalControlSocket));
+            }
+            catch(ConnectionDisposedException)
+            {
+                this.Log(LogLevel.Error, "Can't respond to the external because {0} is already diposed", nameof(ExternalControlSocket));
+            }
+        }
+
+        private void RxThreadBody()
+        {
+            if(!isClient)
+            {
+                this.Log(LogLevel.Info, "Listening for connections on port: {0}", port);
+                while(true)
+                {
+                    lock(socketLocker)
+                    {
+                        Socket socket;
+                        try
+                        {
+                            socket = listenerSocket?.Accept();
+                        }
+                        catch(SocketException e)
+                        {
+                            this.Log(LogLevel.Error, "Error while accepting the connection: {0}", e.Message);
+                            continue;
+                        }
+                        catch(ObjectDisposedException)
+                        {
+                            this.Log(LogLevel.Debug, "Server disposed while accepting");
+                            return;
+                        }
+
+                        if(socket is not null)
+                        {
+                            communicationSocket = socket;
+                            communicationSocket.NoDelay = true;
+                            this.Log(LogLevel.Info, "Connection accepted");
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if(!TryChangeState(State.Active))
+            {
+                return;
+            }
+            clientConnectionEvent.Set();
+
+            Span<byte> headerBuffer = stackalloc byte[Message.HeaderSize];
+
+            while(true)
+            {
+                try
+                {
+                    ReceiveAll(communicationSocket, headerBuffer);
+                    if(!Message.TryDecodeHeader(headerBuffer, out var message))
+                    {
+                        this.ErrorLog("Invalid message header received: {0}", headerBuffer.ToArray().ToLazyHexString());
+                        continue;
+                    }
+                    this.NoisyLog("Received header: id: {0} size: {1}", message.Id, message.PayloadSize);
+
+                    var payloadBuffer = new byte[message.PayloadSize];
+                    ReceiveAll(communicationSocket, payloadBuffer);
+
+                    if(!message.TryDecodePayload(payloadBuffer))
+                    {
+                        this.ErrorLog("Invalid message payload: {0}", payloadBuffer.ToLazyHexString());
+                    }
+
+                    this.DebugLog("Message received: {0}", message);
+                    GetHandlerForMessage(message).PutMessage(message);
+                }
+                catch(OperationCanceledException)
+                {
+                    // Expected when terminating the connection
+                    Disconnect(allowReconnection: !isClient);
+                    return;
+                }
+                catch(ObjectDisposedException)
+                {
+                    this.Log(LogLevel.Debug, "Server disposed while receiving");
+                    return;
+                }
+                catch(SocketException e)
+                {
+                    this.ErrorLog("Socket error while receiving: {0}, disposing of the {1}", e.Message, isClient ? "client" : "server");
+                    Disconnect();
+                    return;
+                }
+            }
+        }
+
+        private void ReceiveAll(Socket sock, Span<byte> buffer)
+        {
+            var total = 0;
+            while(total < buffer.Length)
+            {
+                var current = sock.Receive(buffer[total..]);
+                if(current == 0)
+                {
+                    throw new OperationCanceledException();
+                }
+                total += current;
+            }
+        }
+
+        private void CloseSocket(Socket sock)
+        {
+            if(sock == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if(sock.Connected)
+                {
+                    sock.Shutdown(SocketShutdown.Both);
+                }
+            }
+            finally
+            {
+                sock.Close();
+            }
+            sock.Dispose();
+        }
+
+        private CommunicationHandler GetHandlerForMessage(Message message) =>
+            message.IsExternallyInitiated ? externalHandler : internalHandler;
+
+        private CommunicationHandler GetHandlerForCurrentThread()
+        {
+            if(isClient)
+            {
+                // For client sockets the default thread should use the internalHandler (i.e. for messages intitated by a server)
+                return defaultHandlerThread.ManagedThreadId == Environment.CurrentManagedThreadId ? internalHandler : externalHandler;
+            }
+            return defaultHandlerThread.ManagedThreadId == Environment.CurrentManagedThreadId ? externalHandler : internalHandler;
+        }
+
+        private bool TryChangeState(State newState)
+        {
+            lock(stateLocker)
+            {
+                if(state == State.Disposed || state == newState)
+                {
+                    this.Log(LogLevel.Debug, "Can't transit to {0} state when in {1} state", newState, state);
+                    return false;
+                }
+                else
+                {
+                    this.Log(LogLevel.Noisy, "State transition: {0} -> {1}", state, newState);
+                    state = newState;
+                    return true;
+                }
+            }
+        }
+
+        private State state = State.Unconnected;
+        private Socket communicationSocket;
+        private Socket listenerSocket;
+        private Thread rxThread;
+        private Thread defaultHandlerThread;
+        private CommunicationHandler externalHandler;
+        private CommunicationHandler internalHandler;
+        private CancellationTokenSource disposeCancelationTokenSource;
+        private CommandHandlerCollection commandHandlers;
+
+        private readonly bool isClient;
+        private readonly int port;
+        private readonly object socketLocker = new object();
+        private readonly object rxThreadLocker = new object();
+        private readonly object stateLocker = new object();
+        private readonly object handlersLocker = new object();
+        private readonly AutoResetEvent clientConnectionEvent = new(false);
+
+        private class CommandHandlerCollection : IDisposable
+        {
+            public CommandHandlerCollection()
+            {
+                commandHandlers = new Dictionary<Command, ICommand>();
+            }
+
+            public void Dispose()
+            {
+                foreach(var command in commandHandlers.Values.OfType<IDisposable>())
+                {
+                    command.Dispose();
+                }
+                commandHandlers.Clear();
+            }
+
+            public void Register(ICommand command)
+            {
+                commandHandlers.Add(command.Identifier, command);
+            }
+
+            public ICommand GetHandler(Command id)
+            {
+                if(!commandHandlers.TryGetValue(id, out var command))
+                {
+                    return null;
+                }
+                return command;
+            }
+
+            private readonly Dictionary<Command, ICommand> commandHandlers;
+        }
+
+        private struct RemoteBusRegistrationRequest
+        {
+            public RemoteBusRegistrationRequest(int remoteMachineId, string remotePeripheralName)
+            {
+                nameBytes = Encoding.UTF8.GetBytes(remotePeripheralName);
+                internals = new Internals(-1, remoteMachineId, nameBytes.Length);
+            }
+
+            public byte[] GetRawBytes()
+            {
+                return internals.AsRawBytes().Concat(nameBytes).ToArray();
+            }
+
+            [StructLayout(LayoutKind.Sequential, Pack = 1)]
+            private record struct Internals(int Id, int RemoteMachineId, int NameLength);
+
+            private readonly Internals internals;
+            // Array size cannot be inferred at runtime by Marshal.SizeOf, so it remains outside
+            private readonly byte[] nameBytes;
+        }
+
+        private enum State
+        {
+            Unconnected,
+            Active,
+            Disposed,
+        }
+    }
+}

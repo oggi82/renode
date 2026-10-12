@@ -45,44 +45,7 @@ Create Echo Peripheral
     Execute Command                 include "${echo_i2c_peripheral}"
     Execute Command                 setup_echo_i2c_peripheral "sysbus.i2c.dummy"
 
-*** Test Cases ***
-UART Should Work
-    Create Machine                  ${HELLO_WORLD_BIN}    ${HELLO_WORLD_ELF}
-    Create Terminal Tester          sysbus.uart1
-
-    Wait For Line On Uart           Hello, world!    pauseEmulation=true
-    Provides                        machine-after-hello-world
-
-Watchdog Should Reset Machine Continuously If Not Frozen
-    Requires                        machine-after-hello-world
-    Create Log Tester               5
-
-    # Let's check this sample without GeneralPurposeRegisters containing Watchdog freeze register.
-    # It should reset over and over again without the ability to freeze it.
-    Execute Command                 sysbus Unregister sysbus.gp_regs
-
-    # Failed attempt to freeze watchdog.
-    Wait For Log Entry              WriteDoubleWord to non existing peripheral at 0x50050300, value 0x8
-
-    # And resets all over the place.
-    Wait For Log Entry              sys_wdog: Reseting machine
-    Wait For Log Entry              sys_wdog: Reseting machine
-    Wait For Log Entry              sys_wdog: Reseting machine
-
-Freezing Watchdog Should Work
-    Requires                        machine-after-hello-world
-    Create Log Tester               5
-    Execute Command                 logLevel -1 sysbus.sys_wdog
-    Execute Command                 sysbus LogPeripheralAccess sysbus.gp_regs
-
-    # Sample freezes Watchdog after reaching limit which prevents resetting machine.
-    Wait For Log Entry              sys_wdog: Limit reached
-    Wait For Log Entry              WriteUInt32 to 0x0 (SetFreeze), value 0x8
-    Wait For Log Entry              sys_wdog: Freeze set
-
-    Should Not Be In Log            sys_wdog: Resetting machine
-
-Test Watchdog
+Create Machine After Reset
     Create Machine          ${WATCHDOG_BIN}  ${WATCHDOG_ELF}
 
     Create Log Tester       5    defaultPauseEmulation=true
@@ -113,10 +76,53 @@ Test Watchdog
     Wait For Log Entry      sys_wdog: Limit reached    timeout=0.17
     Wait For Log Entry      sys_wdog: Reseting machine
 
+*** Test Cases ***
+UART Should Work
+    Create Machine                  ${HELLO_WORLD_BIN}    ${HELLO_WORLD_ELF}
+    Create Terminal Tester          sysbus.uart1
+
+    Wait For Line On Uart           Hello, world!    pauseEmulation=true
+    Provides                        machine-after-hello-world
+
+Freezing Watchdog Should Work
+    Requires                        machine-after-hello-world
+    Create Log Tester               5
+    Execute Command                 logLevel -1 sysbus.sys_wdog
+    Execute Command                 sysbus LogPeripheralAccess sysbus.gp_regs
+
+    # Sample freezes Watchdog after reaching limit which prevents resetting machine.
+    Wait For Log Entry              sys_wdog: Limit reached
+    Wait For Log Entry              WriteUInt32 to 0x0 (SetFreeze), value 0x8
+    Wait For Log Entry              sys_wdog: Freeze set
+
+    Should Not Be In Log            sys_wdog: Resetting machine
+
+Test Watchdog
+    Create Machine After Reset
+
+Watchdog Should Reset Machine Continuously If Not Frozen
+    Create Machine After Reset
+
+    # Remove the possibility of freezing Watchdog by unregistering
+    # GeneralPurposeRegisters containing Watchdog freeze register.
+    Execute Command         sysbus Unregister sysbus.gp_regs
+
+    # Failed attempt to freeze watchdog.
+    Wait For Log Entry      WriteDoubleWord to non existing peripheral at 0x50050300, value 0x8
+
+    # Speed up the wait for the machine reset by setting quantum and advancing immediatly.
+    Execute Command         emulation SetGlobalQuantum "0.001"
+    Execute Command         emulation SetAdvanceImmediately true
+
+    # With GeneralPurpouseRegisters removed the machine should keep on reseting.
+    Wait For Log Entry      sys_wdog: Reseting machine    timeout=85
+    Wait For Log Entry      sys_wdog: Reseting machine    timeout=85
+    Wait For Log Entry      sys_wdog: Reseting machine    timeout=85
+
 Test GPADC
     Create Machine                  ${ADC_BIN}   ${ADC_ELF}
     Create Terminal Tester          sysbus.uart1
-    Execute Command                 sysbus.gpadc FeedSamplesFromRESD @${ADC_RESD} 6 6
+    Execute Command                 sysbus.gpadc.gpadc-channel6 FeedSamplesFromRESD @${ADC_RESD} 6
 
     Wait For Line On Uart           ADC read completed
     Wait For Line On Uart           Number of samples: 21, ADC result value: 19026

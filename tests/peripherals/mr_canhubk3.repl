@@ -30,11 +30,6 @@ mc_cgm_css0: Python.PythonPeripheral @ sysbus 0x402D8304
     initable: true
     filename: "scripts/pydev/flipflop.py"
 
-mc_cgm_css3: Python.PythonPeripheral @ sysbus 0x402D83C4
-    size: 0x4
-    initable: true
-    filename: "scripts/pydev/flipflop.py"
-
 mc_cgm_css4: Python.PythonPeripheral @ sysbus 0x402D8404
     size: 0x4
     initable: true
@@ -153,6 +148,7 @@ sysbus:
         Tag <0x402C8004 0x4> "SIRC_status" 0x00000001
         Tag <0x402CC004 0x4> "SXOSC_status" 0x80000000
         Tag <0x402D4004 0x4> "FXOSC_status" 0x80000000
+        Tag <0x402D83C4 0x4> "MUX_3_CSS" 0x02000000
         Tag <0x402DC108 0x4> "ME_MP_part0_status" 0x00000001
         Tag <0x402DC114 0x4> "ME_MP_part0_set1_status" 0xFFFFFFFF
         Tag <0x402DC310 0x4> "ME_MP_part1_set0_status" 0xFFFFFFFF
@@ -171,27 +167,27 @@ sysbus:
 dwt: Miscellaneous.DWT @ sysbus 0xE0001000
     frequency: 72000000
 
-can0: CAN.S32K3XX_FlexCAN @ sysbus 0x40304000
+can0: CAN.NXP_FlexCAN @ sysbus 0x40304000
     numberOfMessageBuffers: 96
     enhancedRxFifoSize: 20
     -> nvic0@109
 
-can1: CAN.S32K3XX_FlexCAN @ sysbus 0x40308000
+can1: CAN.NXP_FlexCAN @ sysbus 0x40308000
     numberOfMessageBuffers: 64
     -> nvic0@113
 
-can2: CAN.S32K3XX_FlexCAN @ sysbus 0x4030C000
+can2: CAN.NXP_FlexCAN @ sysbus 0x4030C000
     numberOfMessageBuffers: 64
     -> nvic0@116
 
-can3: CAN.S32K3XX_FlexCAN @ sysbus 0x40310000
+can3: CAN.NXP_FlexCAN @ sysbus 0x40310000
     numberOfMessageBuffers: 64
     -> nvic0@119
 
-can4: CAN.S32K3XX_FlexCAN @ sysbus 0x40314000
+can4: CAN.NXP_FlexCAN @ sysbus 0x40314000
     numberOfMessageBuffers: 64
     -> nvic0@121
 
-can5: CAN.S32K3XX_FlexCAN @ sysbus 0x40318000
+can5: CAN.NXP_FlexCAN @ sysbus 0x40318000
     numberOfMessageBuffers: 64
     -> nvic0@123

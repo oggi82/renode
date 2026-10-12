@@ -1,5 +1,5 @@
 *** Settings ***
-Library                             tap_helper.py    # used for 'Precofingure Macos' keyword
+Library                             vmnet_helper.py  # used for 'Preconfigure Vmnet Helper' keyword
 
 *** Variables ***
 ${UART}                             sysbus.uart0
@@ -26,6 +26,10 @@ ${ZYNQ_UFS_ROOTFS}                  @https://dl.antmicro.com/projects/renode/zyn
 ${ZYNQ_UFS_DTB}                     @https://dl.antmicro.com/projects/renode/zynq--linux-ufs.dtb-s_12720-0dfc729e7c8db7b51c5eb4dfd990cee186de1442
 ${ZYNQ_UFS_TEST_DISK_IMG}           @https://dl.antmicro.com/projects/renode/test-fs-ext2.img-s_524288-67f5bc210d7be8905b4de4ae5d70a8a142459110
 ${ZYNQ_WATCHDOG_RESET_DTB}          @https://dl.antmicro.com/projects/renode/zynq--linux-watchdog-reset-on-timeout.dtb-s_12898-a3b65664ac84db801b0dad1525207f304e8a7428
+${ZYNQ_ARM_DMA_350_BIN}             @https://dl.antmicro.com/projects/renode/zynq-arm-dma-350-vmlinux.stripped-s_14939484-091697c1312512e0628e86199c321c9d189bda49
+${ZYNQ_ARM_DMA_350_ROOTFS}          @https://dl.antmicro.com/projects/renode/zynq-arm-dma-350-rootfs.ext2-s_67108864-9f4f0e1ee23a09ffe79290ff4796376f4adf030c
+${ZYNQ_ARM_DMA_350_DTB}             @https://dl.antmicro.com/projects/renode/zynq-arm-dma-350.dtb-s_12058-71c5729aa0d3c78fb44471376a00d7060f41e3b1
+${ZYNQ_ARM_DMA_350_LOGIN_PROMPT}    buildroot login:
 ${CADENCE_XSPI_PERIPHERAL}          SEPARATOR=\n
 ...                                 """
 ...                                 xspi: SPI.Cadence_xSPI @ {
@@ -55,7 +59,8 @@ ${UFS_HOST_TASK_MGMT_SLOTS}         8
 
 ${UFS_DEVICE_LOGICAL_UNITS}         4
 ${UFS_DEVICE_LOGICAL_BLOCK_SIZE}    4096
-${UFS_DEVICE_BLOCK_COUNT}           65536
+${UFS_DEVICE_BLOCK_COUNT}           65536  # Default
+${UFS_DEVICE_BLOCK_COUNTS}          [8192, 16384, 32768]  # Last one will come from UFS_DEVICE_BLOCK_COUNT
 
 ${UFS_DEVICE_MANUFACTURER_NAME}     "Antmicro"
 ${UFS_DEVICE_PRODUCT_NAME}          "RenodeUFSStorage"
@@ -104,6 +109,7 @@ ${UFS_DEVICE_PERIPHERAL}            SEPARATOR=\n
 ...                                 ${SPACE*4}serialNumber: ${UFS_DEVICE_SERIAL_NUMBER}
 ...                                 ${SPACE*4}oemID: ${UFS_DEVICE_OEM_ID}
 ...                                 ${SPACE*4}productRevisionLevel: ${UFS_DEVICE_PRODUCT_REV_LEVEL}
+...                                 ${SPACE*4}logicalUnitBlockCounts: ${UFS_DEVICE_BLOCK_COUNTS}
 ...                                 """
 
 ${DEFAULT_IRQ_TEST}                 SEPARATOR=\n
@@ -118,6 +124,14 @@ ${DEFAULT_IRQ_TEST}                 SEPARATOR=\n
 ...                                 ${SPACE*4}RxFifoFullIRQ -> led52@0
 ...                                 """
 
+${ARM_DMA_350_PERIPHERAL}           SEPARATOR=\n
+...                                 """
+...                                 dma350: DMA.Arm_Dma350 @ sysbus 0x42000000
+...                                 ${SPACE*4}numberOfChannels: 2
+...                                 ${SPACE*4}0 -> gic@54
+...                                 ${SPACE*4}1 -> gic@55
+...                                 """
+
 *** Keywords ***
 Create Machine
     Execute Command                 include @scripts/single-node/zedboard.resc
@@ -126,6 +140,19 @@ Create Machine
     Execute Command                 machine LoadPlatformDescriptionFromString "spiFlash0: SPI.Micron_MT25Q @ spi0 0 { underlyingMemory: spi0FlashMemory; extendedDeviceId: 0x44 }; spi0FlashMemory: Memory.MappedMemory { size: 0x2000000 }"
     Execute Command                 machine LoadPlatformDescriptionFromString "spiFlash1: SPI.Cypress_S25H @ spi0 1 { underlyingMemory: spi1FlashMemory }; spi1FlashMemory: Memory.MappedMemory { size: 0x4000000 }"
     ${tester}=                      Create Terminal Tester          ${UART}
+    RETURN                          ${tester}
+
+Create ARM DMA-350 Machine
+    Execute Command                 $name="ZedboardARM_DMA350"
+    Execute Command                 $bin=${ZYNQ_ARM_DMA_350_BIN}
+    Execute Command                 $rootfs=${ZYNQ_ARM_DMA_350_ROOTFS}
+    Execute Command                 $dtb=${ZYNQ_ARM_DMA_350_DTB}
+    Execute Command                 $bootargs="console=ttyPS0,115200 root=/dev/ram0 rw initrd=0x18000000,64M"
+    Execute Command                 $initrd_address=0x18000000
+    Execute Command                 $initrd_memory_size=0x4000000
+    Execute Command                 include @scripts/single-node/zedboard.resc
+    Execute Command                 machine LoadPlatformDescriptionFromString ${ARM_DMA_350_PERIPHERAL}
+    ${tester}=                      Create Terminal Tester          sysbus.uart1
     RETURN                          ${tester}
 
 Boot And Login
@@ -220,6 +247,10 @@ Map Index To Disk Letter
     [Arguments]                     ${index}
     ${letter}=                      Evaluate    chr(97 + ${index})
     RETURN                          ${letter}
+
+Test Teardown And Kill Vmnet Helper
+    Kill Vmnet Helper
+    Test Teardown
 
 *** Test Cases ***
 Should Boot And Login
@@ -356,6 +387,20 @@ Should Access SPI Flash Memory Via Additional Cadence xSPI IP With The Auto Comm
 
     Should Access SPI Flash Memory Via Additional Cadence xSPI 
 
+Should Pass ARM DMA-350 Tests
+    Create ARM DMA-350 Machine
+    Start Emulation
+
+    Wait For Line On Uart           ${ZYNQ_ARM_DMA_350_LOGIN_PROMPT}  timeout=120
+    Write Line To Uart              root
+    Wait For Prompt On Uart         ${PROMPT}
+    Write Line To Uart              test -d /sys/bus/platform/drivers/arm-dma350/42000000.dma-controller && echo DMA350_DRIVER_BOUND  waitForEcho=false
+    Wait For Line On Uart           DMA350_DRIVER_BOUND
+    Write Line To Uart              /root/dma_test
+    Wait For Line On Uart           DMA350_DEMO: memcpy PASS       timeout=60
+    Wait For Line On Uart           DMA350_DEMO: memset PASS       timeout=60
+    Wait For Line On Uart           DMA350_DEMO: ALL TESTS PASS
+
 Should Boot And Login With UFS
     [Tags]                          basic-tests
     Execute Command                 $bin=${ZYNQ_UFS_BIN}
@@ -399,6 +444,26 @@ Should Access UFS Storage
         Write Line To Uart              cat ${FILE_PATH}
         Wait For Line On Uart           ${OUTPUT_LIST}[${i}]
         Execute Linux Command           umount ${MOUNT_POINT}
+    END
+
+Should Report Specified UFS Logical Unit Sizes
+    Requires                        ufs-logged-in
+
+    ${BLOCK_COUNTS}=                Evaluate  ast.literal_eval($UFS_DEVICE_BLOCK_COUNTS)  ast
+    ${EFFECTIVE_BLOCK_COUNTS}=      Evaluate  $BLOCK_COUNTS[:${UFS_DEVICE_LOGICAL_UNITS}] + [${UFS_DEVICE_BLOCK_COUNT}] * max(0, ${UFS_DEVICE_LOGICAL_UNITS} - len($BLOCK_COUNTS))
+
+    # Check that the fallback/default size logic works
+    ${MODEL_BLOCK_COUNTS}=          Execute Command  ufs.ufsStorage LogicalUnitBlockCounts
+    ${MODEL_BLOCK_COUNTS}=          Evaluate  ast.literal_eval($MODEL_BLOCK_COUNTS)  ast
+    Should Be Equal                 ${EFFECTIVE_BLOCK_COUNTS}  ${MODEL_BLOCK_COUNTS}
+
+    # Check that guest software sees the configured sizes
+    ${SECTOR_COUNTS_512B}=          Evaluate  [math.ceil(bs / 512 * ${UFS_DEVICE_LOGICAL_BLOCK_SIZE}) for bs in $EFFECTIVE_BLOCK_COUNTS]  math
+
+    Write Line To Uart              fdisk -l /dev/sd*
+
+    FOR  ${i}  ${count}  IN ENUMERATE  @{SECTOR_COUNTS_512B}
+        Wait For Line On Uart           Disk /dev/sd${{chr(ord('a') + $i)}}: .*, ${count} sectors  treatAsRegex=true
     END
 
 Should Load Disk Image For UFS Storage From File
@@ -515,7 +580,7 @@ Should Ping
     Wait For Prompt On Uart         ${PROMPT}  testerId=${tester1}
 
 Should Ping Over TAP
-    [Tags]                          ethernet  tap  basic-tests
+    [Tags]                          ethernet  tap  basic-tests  exclude_osx
     Requires                        logged-in
 
     Set Test Variable               ${TAP_INTERFACE}  tap0
@@ -526,7 +591,6 @@ Should Ping Over TAP
     Execute Command                 emulation CreateSwitch "switch"
     Execute Command                 emulation CreateTap "${TAP_INTERFACE}" "tap"
 
-    Preconfigure Macos              tap0  ${TAP_INTERFACE_IP}  255.255.255.0
     Network Interface Should Have Address  ${TAP_INTERFACE}  ${TAP_INTERFACE_IP}
 
     Execute Command                 connector Connect host.tap switch
@@ -536,6 +600,31 @@ Should Ping Over TAP
 
     Write Line To Uart              ping -c 5 ${TAP_INTERFACE_IP}
     Wait For Line On Uart           5 packets transmitted, 5 packets received, 0% packet loss
+
+Should Ping Over Vmnet Helper
+    [Tags]                          ethernet  vmnet  exclude_windows  exclude_linux
+    Requires                        logged-in
+
+    Set Test Variable               ${TAP_INTERFACE_IP}  192.168.18.2
+    Set Test Variable               ${START_IP}  192.168.18.1
+    Set Test Variable               ${END_IP}  192.168.18.20
+    Set Test Variable               ${MASK}  255.255.255.0
+
+    ${TMP_DIR}=                     Evaluate  __import__('tempfile').mkdtemp()  modules=tempfile
+    ${SOCKET_PATH}=                 Join Path  ${TMP_DIR}  vmnet_helper.sock
+
+    Preconfigure Vmnet Helper       ${START_IP}  ${END_IP}  ${MASK}  ${SOCKET_PATH}
+
+    Execute Command                 emulation CreateSwitch "switch"
+    Execute Command                 emulation CreateVmnetHelper "${SOCKET_PATH}" "vmnet"
+    Execute Command                 connector Connect host.vmnet switch
+    Execute Command                 connector Connect gem0 switch
+
+    Execute Linux Command           ifconfig eth0 up ${TAP_INTERFACE_IP}
+    Write Line To Uart              ping -c 5 ${START_IP}
+    Wait For Line On Uart           5 packets transmitted, 5 packets received, 0% packet loss
+
+    [Teardown]                      Test Teardown And Kill Vmnet Helper
 
 Should Pass Default Interrupt Test
     # This test checks `DefaultInterrupt` behavior with named and unnamed GPIOs
@@ -554,3 +643,18 @@ Should Pass Default Interrupt Test
     Assert LED State               true   testerId=${generic_irq_tester}
     Assert LED State               true   testerId=${rx_empty_tester}
     Assert LED State               false  testerId=${rx_full_tester}
+
+Should Read ADC Value
+    Requires                        logged-in
+
+    Execute Command                 machine LoadPlatformDescriptionFromString "adc_source: Analog.ADCChannelSource @ xadc 1"
+    Write Line To Uart              cd /sys/devices/soc0/axi/f8007100.adc/iio:device0
+
+    Write Line To Uart              cat in_voltage0_vccint_raw
+    Wait For Line On Uart           0
+
+    Execute Command                 xadc.adc_source Volts 1.5
+    ## Use printf + bc's scale to round the voltage to read 1.5 instead of 1.49
+    Write Line To Uart              printf "%.1f\\n" $(echo "scale=2; $(cat in_voltage0_vccint_raw) * $(cat in_voltage0_vccint_scale) / 1000" | bc)
+    ...                             waitForEcho=False   # Command is too long to have echo on 1 line
+    Wait For Line On Uart           1.5

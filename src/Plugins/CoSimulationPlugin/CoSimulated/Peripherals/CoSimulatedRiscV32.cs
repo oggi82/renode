@@ -64,6 +64,11 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             return mapping.Values.OrderBy(x => x.Index);
         }
 
+        public IEnumerable<CPURegister> GetAllRegisters()
+        {
+            return GetRegisters();
+        }
+
         public void EnterSingleStepModeSafely(HaltArguments args)
         {
             // this method should only be called from CPU thread,
@@ -86,12 +91,12 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             this.Log(LogLevel.Warning, "AddHookAtInterruptEnd not implemented");
         }
 
-        public void AddHook(ulong addr, Action<ICpuSupportingGdb, ulong> hook)
+        public void AddHook(ulong addr, CpuAddressHook hook)
         {
             this.Log(LogLevel.Warning, "AddHook not implemented");
         }
 
-        public void RemoveHook(ulong addr, Action<ICpuSupportingGdb, ulong> hook)
+        public void RemoveHook(ulong addr, CpuAddressHook hook)
         {
             this.Log(LogLevel.Warning, "RemoveHook not implemented");
         }
@@ -109,6 +114,11 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
         public void RemoveAllHooks()
         {
             this.Log(LogLevel.Warning, "RemoveAllHooks not implemented");
+        }
+
+        public void RemoveHooks(CpuAddressHook hook)
+        {
+            this.Log(LogLevel.Warning, "RemoveHooks not implemented");
         }
 
         public override string Architecture { get { return "riscv"; } }

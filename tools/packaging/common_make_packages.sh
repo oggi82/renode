@@ -1,6 +1,3 @@
-MONOVERSION=`cat ../mono_version`
-MONO_MAJOR=`echo $MONOVERSION | cut -d'.' -f1`
-MONO_MINOR=`echo $MONOVERSION | cut -d'.' -f2`
 DOTNET_VERSION="8.0"
 TARGET="Release"
 BASE=../..
@@ -25,6 +22,13 @@ function is_dep_available {
     return 0
 }
 
+function trim_python_stdlib {
+    # Remove CPython stdlib modules bundled with IronPython.StdLib that are
+    # not useful in Renode packages: pip is unsupported by IronPython, distutils
+    # and lib2to3 are build tools, and pydoc_data is offline documentation data.
+    rm -rf "$1/ensurepip" "$1/distutils" "$1/lib2to3" "$1/pydoc_data"
+}
+
 while getopts ":dnl" opt
 do
     case $opt in
@@ -32,7 +36,7 @@ do
             TARGET="Debug"
             ;;
         n)
-            DATE="+`date +%Y%m%d`"
+            DATE="+`date -u +%Y%m%d`"
             COMMIT="git`git rev-parse --short=9 HEAD`"
             ;;
         l)

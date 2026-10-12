@@ -1,43 +1,37 @@
 //
-// Copyright (c) 2010-2022 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
+using System;
+using System.IO;
+
+using Antmicro.Migrant;
 using Antmicro.Renode.Core;
 using Antmicro.Renode.Exceptions;
-
-#if !PLATFORM_WINDOWS
-using System;
-
+using Antmicro.Renode.Peripherals;
 using Antmicro.Renode.Peripherals.UART;
 using Antmicro.Renode.Utilities;
 
 using AntShell.Terminal;
 
-using Antmicro.Migrant;
-
-using Mono.Unix;
-
-using System.IO;
-#endif
-
 namespace Antmicro.Renode.Backends.Terminals
 {
     public static class UartPtyTerminalExtensions
     {
+        [SupportedRID("unix")]
         public static void CreateUartPtyTerminal(this Emulation emulation, string name, string fileName, bool forceCreate = false)
         {
-#if !PLATFORM_WINDOWS
+            if(RuntimeInfo.IsWindows())
+            {
+                throw new RecoverableException("Creating UartPtyTerminal is not supported on Windows.");
+            }
             emulation.ExternalsManager.AddExternal(new UartPtyTerminal(fileName, forceCreate), name);
-#else
-            throw new RecoverableException("Creating UartPtyTerminal is not supported on Windows.");
-#endif
         }
     }
 
-#if !PLATFORM_WINDOWS
-    public class UartPtyTerminal : BackendTerminal, IDisposable
+    public class UartPtyTerminal : BackendTerminal, IDisposable, IHasOwnLife
     {
         public UartPtyTerminal(string linkName, bool forceCreate = false)
         {
@@ -52,11 +46,11 @@ namespace Antmicro.Renode.Backends.Terminals
             io.Dispose();
             try
             {
-                symlink.Delete();
+                File.Delete(symlink);
             }
             catch(FileNotFoundException e)
             {
-                throw new RecoverableException(string.Format("There was an error when removing symlink `{0}': {1}", symlink.FullName, e.Message));
+                throw new RecoverableException(string.Format("There was an error when removing symlink `{0}': {1}", symlink, e.Message));
             }
         }
 
@@ -78,14 +72,49 @@ namespace Antmicro.Renode.Backends.Terminals
             }
         }
 
+        public void Start()
+        {
+            Resume();
+        }
+
+        public void Pause()
+        {
+            lock(startedLock)
+            {
+                IsPaused = true;
+            }
+        }
+
+        public void Resume()
+        {
+            lock(startedLock)
+            {
+                IsPaused = false;
+            }
+        }
+
+        public bool IsPaused { get; private set; } = true;
+
         [Migrant.Hooks.PostDeserialization]
         private void Initialize()
         {
             ptyStream = new PtyUnixStream();
             io = new IOProvider { Backend = new StreamIOSource(ptyStream) };
-            io.ByteRead += b => CallCharReceived((byte)b);
+            io.ByteRead += b => HandleReceived((byte)b);
 
             CreateSymlink();
+        }
+
+        private void HandleReceived(byte received)
+        {
+            lock(startedLock)
+            {
+                if(IsPaused)
+                {
+                    return;
+                }
+            }
+            CallCharReceived(received);
         }
 
         private void CreateSymlink()
@@ -108,8 +137,7 @@ namespace Antmicro.Renode.Backends.Terminals
             }
             try
             {
-                var slavePtyFile = new UnixFileInfo(ptyStream.SlaveName);
-                symlink = slavePtyFile.CreateSymbolicLink(linkName);
+                symlink = File.CreateSymbolicLink(linkName, ptyStream.SlaveName).FullName;
             }
             catch(Exception e)
             {
@@ -122,10 +150,10 @@ namespace Antmicro.Renode.Backends.Terminals
         [Transient]
         private IOProvider io;
 
-        private UnixSymbolicLinkInfo symlink;
+        private string symlink;
+        private readonly object startedLock = new object();
 
         private readonly bool forceCreate;
         private readonly string linkName;
     }
-#endif
 }

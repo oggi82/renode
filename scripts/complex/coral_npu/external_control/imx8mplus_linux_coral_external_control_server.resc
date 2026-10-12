@@ -1,0 +1,15 @@
+i $ORIGIN/imx8mplus_linux_coral_external_control_server_base.resc
+
+echo ""
+echo "i.MX 8M Plus Linux with Coral NPU"
+echo ""
+echo "Available commands in the Linux shell:"
+echo "  prepare_coral   - stages rvv_add_intrinsic.bin into the NPU's ITCM"
+echo "  run_coral       - runs the payload on the NPU and reports its instruction usage statistics"
+echo "  arm_vector_add  - runs the same payload natively on the Cortex-A53 cores and reports its instruction usage statistics"
+echo ""
+
+echo "Waiting for client to connect..."
+server WaitForClientConnection 60
+
+runMacro $registerClientCallbacks

@@ -1,6 +1,11 @@
+*** Settings ***
+Library                             ${CURDIR}/../../tools/execution_tracer/execution_tracer_keywords.py
+
 *** Variables ***
 ${COVERAGE_TEST_BINARY_URL}         https://dl.antmicro.com/projects/renode/coverage-tests/coverage-test.elf-s_3603888-0f7cfe992528c2576a9ac6a4dcc3a41b03d1d6eb
 ${COVERAGE_TEST_CODE_URL}           https://dl.antmicro.com/projects/renode/coverage-tests/main.c
+${COVERAGE_TEST_PC_LINE_SHORT_URL}  https://dl.antmicro.com/projects/renode/coverage-test-long.pclin-s_3793722-41205f1fbb53838ef9e1f22ac5f93da33dd7b819
+${COVERAGE_TEST_PC_LINE_LONG_URL}   https://dl.antmicro.com/projects/renode/coverage-test-short.pclin-s_798598-efe5d5bbf5738887e0720a5c7673917139bfff76
 ${COVERAGE_TEST_CODE_FILENAME}      main.c
 ${EXECUTION_TRACER}                 ${RENODETOOLS}/execution_tracer/execution_tracer_reader.py
 ${TRACED_CPU}                       cpu1
@@ -60,6 +65,13 @@ ${TRACED_CPU}                       cpu1
 ...                                 DA:43,1
 ...                                 DA:44,1
 ...                                 end_of_record
+
+${symbol_lookup_regex}              (0x[A-F0-9]+): (0x[A-F0-9]+) +(.*)
+
+&{symbol_lookup_rules}=             # symbol regex             =    (low_pc    , high_pc   )
+...                                 main @ main.c:[0-9]+:[0-9]+=${{ (0x80000cbc, 0x80000df8) }}
+...                                 funA @ main.c:[0-9]+:[0-9]+=${{ (0x80000c12, 0x80000c6c) }}
+...                                 funB @ main.c:[0-9]+:[0-9]+=${{ (0x80000bb6, 0x80000c12) }}
 
 ${LINUX_32BIT_ROOTFS}               https://dl.antmicro.com/projects/renode/zynq--interface-tests-rootfs.ext2-s_16777216-191638e3b3832a81bebd21d555f67bf3a4d7882a
 
@@ -127,7 +139,7 @@ Should Report Proper Coverage LCOV
     Should Be Equal As Strings      ${report}  ${expected_lines}  strip_spaces=True
 
 Trace And Report Coverage
-    [Arguments]                     ${is_legacy}  ${compress}=False
+    [Arguments]                     ${is_legacy}  ${compress}=False  ${use_pc2line}="no"
     ${coverage_file}=               Allocate Temporary File
     ${binary_file}=                 Download File  ${COVERAGE_TEST_BINARY_URL}
     ${code_file}=                   Download File And Rename  ${COVERAGE_TEST_CODE_URL}  ${COVERAGE_TEST_CODE_FILENAME}
@@ -144,8 +156,6 @@ Trace And Report Coverage
     Append To List                  ${script_args}
     ...                             coverage
     ...                             ${trace}
-    ...                             --binary
-    ...                             ${binary_file}
     ...                             --sources
     ...                             ${code_file}
     ...                             --output
@@ -153,6 +163,22 @@ Trace And Report Coverage
 
     IF  ${is_legacy} == True
         Append To List              ${script_args}  --legacy
+    END
+
+    IF  $use_pc2line == "short"
+        ${pclin_short_file}=        Download File  ${COVERAGE_TEST_PC_LINE_SHORT_URL}
+        Append To List              ${script_args}
+        ...                         --pc2line
+        ...                         ${pclin_short_file}
+    ELSE IF  $use_pc2line == "long"
+        ${pclin_long_file}=         Download File  ${COVERAGE_TEST_PC_LINE_LONG_URL}
+        Append To List              ${script_args}
+        ...                         --pc2line
+        ...                         ${pclin_long_file}
+    ELSE
+        Append To List              ${script_args}
+        ...                         --binary
+        ...                         ${binary_file}
     END
 
     Execute Python Script           ${EXECUTION_TRACER}  ${script_args}
@@ -165,6 +191,39 @@ Trace And Report Coverage
         # The slice is necessary to omit "filename", which is expected to differ (since the absolute paths are never the same in the temp directory)
         Should Report Proper Coverage LCOV  ${coverage_report}[2:]  ${COVERAGE_REPORT_LCOV}[2:]
     END
+
+
+Trace And Inspect
+    [Arguments]                     ${compress}=False  ${disassemble}=False  ${lookup_symbols}=False
+    ${binary_file}=                 Download File  ${COVERAGE_TEST_BINARY_URL}
+    ${output_file}=                 Allocate Temporary File
+
+    Create Platform                 ${COVERAGE_TEST_BINARY_URL}
+
+    ${trace}=                       Trace Execution  ${TRACED_CPU}  PCAndOpcode  ${compress}
+    ${script_args}=                 Create List
+
+    IF  ${compress} == True
+        Append To List                  ${script_args}  --decompress
+    END
+
+    Append To List                  ${script_args}
+    ...                             inspect
+    ...                             ${trace}
+
+    IF  ${disassemble} == True
+        Append To List                  ${script_args}  --disassemble
+    END
+
+    IF  ${lookup_symbols} == True
+        Append To List                  ${script_args}  --resolve-symbols  ${binary_file}
+    END
+
+    Execute Python Script           ${EXECUTION_TRACER}  ${script_args}  ${output_file}
+
+    ${output_content}=             Get File  ${output_file}
+    ${output}=                     Split To Lines  ${output_content}
+    RETURN                         ${output}
 
 *** Test Cases ***
 Trace And Report Coverage
@@ -179,10 +238,17 @@ Trace With Compressed Output And Report Coverage
 Trace With Compressed Output And Report Coverage In Legacy Format
     Trace And Report Coverage       True  True
 
+Trace And Report Coverage Using Short Pc2Line Mappings
+    Trace And Report Coverage       False  False  short
+
+Trace And Report Coverage Using Long Pc2Line Mappings
+    Trace And Report Coverage       False  False  long
+
 Trace Mixed A64, A32 and T32 Code
     ${disassembly_file}=            Allocate Temporary File
 
     Execute Command                 $rootfs=@${LINUX_32BIT_ROOTFS}
+    Execute Command                 $bootargs="earlycon console=ttyPS1,115200n8 root=/dev/ram0 rw initrd=0x20000000,64M nr_cpus=1"
     Execute Command                 include @scripts/single-node/zynqmp_linux.resc
     Execute Command                 machine SetSerialExecution True
     Create Terminal Tester          sysbus.uart1  defaultPauseEmulation=true
@@ -193,7 +259,7 @@ Trace Mixed A64, A32 and T32 Code
     Wait For Prompt On Uart         \#
     Write Line To Uart              uname -a
 
-    ${trace}=                       Trace Execution  apu1  PCAndOpcode  synchronous=True
+    ${trace}=                       Trace Execution  apu0  PCAndOpcode  synchronous=True
 
     ${script_args}=                 Create List
 
@@ -204,14 +270,38 @@ Trace Mixed A64, A32 and T32 Code
 
     Execute Python Script           ${EXECUTION_TRACER}  ${script_args}  outputPath=${disassembly_file}
 
+    # Note: The specific opcodes and PCs don't really matter, we only want to ensure that each of the
+    # instruction categories was disassembled correctly.
+
     # A64
     ${x}=                           Grep File  ${disassembly_file}  0x0000000010011FE4:*0xD69F03E0*eret
     Should Not Be Empty             ${x}
 
     # A32
-    ${x}=                           Grep File  ${disassembly_file}  0x000000087EE4DE10:*0xE92D40F0*push*{r4,*r5,*r6,*r7,*lr}
+    ${x}=                           Grep File  ${disassembly_file}  0x000000087F052D0C:*0xE92D40F0*push*{r4,*r5,*r6,*r7,*lr}
     Should Not Be Empty             ${x}
 
     # T32
-    ${x}=                           Grep File  ${disassembly_file}  0x000000087B4734D8:*0xBF04*itt*eq
+    ${x}=                           Grep File  ${disassembly_file}  0x000000087F07E4D8:*0xBF04*itt*eq
     Should Not Be Empty             ${x}
+
+Trace And Inspect
+    ${vanilla_inspect}=             Trace And Inspect
+    ${inspect_length}=              Evaluate  len($vanilla_inspect)
+    Should Be Equal As Numbers      ${inspect_length}   1699937
+
+    ${compressed_inspect}=          Trace And Inspect  compress=True
+    Should Be Equal                 ${vanilla_inspect}  ${compressed_inspect}
+
+Trace And Inspect With Symbol Lookup
+    ${lookup_inspect}=              Trace And Inspect  lookup_symbols=True
+    ${inspect_length}=              Evaluate  len($lookup_inspect)
+    Should Be Equal As Numbers      ${inspect_length}   1699937
+
+    # From execution_tracer_keywords.py
+    Validate Symbol Lookup Slice
+    ...    trace_lines=${lookup_inspect}
+    ...    slice_start=590000
+    ...    slice_end=730000
+    ...    line_regex_pattern=${symbol_lookup_regex}
+    ...    function_rules=${symbol_lookup_rules}

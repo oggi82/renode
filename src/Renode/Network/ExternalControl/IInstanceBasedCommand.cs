@@ -6,19 +6,21 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 using Antmicro.Renode.Core;
+using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Utilities;
 
 namespace Antmicro.Renode.Network.ExternalControl
 {
     public static class IInstanceBasedCommandExtensions
     {
-        public static bool TryGetName(Command command, List<byte> data, int offset, out string name, out Response response)
+        public static bool TryGetName(Command command, byte[] data, int offset, out string name, out MessagePayload response)
         {
-            name = default(string);
-            response = default(Response);
+            name = default;
+            response = default;
 
             if(!TryDecodeNameLength(command, data, offset, out var length, out response))
             {
@@ -28,45 +30,70 @@ namespace Antmicro.Renode.Network.ExternalControl
             return TryDecodeName(command, data, offset + NameLengthSize, length, out name, out response);
         }
 
-        public static Response InvokeHandledWithInstance<T>(this IInstanceBasedCommand<T> @this, List<byte> data, Predicate<T> instanceFilter = null)
+        public static IEnumerable<byte> EncodeString(string name)
+        {
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            return BitConverter.GetBytes(nameBytes.Length).Concat(nameBytes);
+        }
+
+        public static int GetInstanceId(MessagePayload payload)
+        {
+            return BitConverter.ToInt32(payload.Data[InstanceIdOffset..(InstanceIdOffset + InstanceIdSize)]);
+        }
+
+        public static ReadOnlySpan<byte> GetPayloadData(MessagePayload payload)
+        {
+            return payload.Data[PayloadOffset..];
+        }
+
+        public static MessagePayload InvokeHandledWithInstance<T>(this IInstanceBasedCommand<T> @this, MessagePayload payload, Predicate<T> instanceFilter = null)
             where T : IEmulationElement
         {
-            if(data.Count < PayloadOffset)
+            if(payload.Data.Length < PayloadOffset)
             {
-                return Response.CommandFailed(@this.Identifier, $"Expected at least {PayloadOffset} bytes of payload");
+                return MessagePayload.Error(@this.Identifier, $"Expected at least {PayloadOffset} bytes of payload");
             }
-            var id = BitConverter.ToInt32(data.GetRange(InstanceIdOffset, InstanceIdSize).ToArray(), 0);
+            var id = GetInstanceId(payload);
 
-            // only non-negative instance ids are valid
-            if(id >= 0 && @this.Instances.TryGet(id, out var instance))
+            var instance = default(T);
+            var instanceFound = false;
+            lock(@this.Instances)
             {
-                return @this.Invoke(instance, data.GetRange(PayloadOffset, data.Count - PayloadOffset));
+                // only non-negative instance ids are valid
+                if(id >= 0 && @this.Instances.TryGet(id, out instance))
+                {
+                    instanceFound = true;
+                }
             }
 
-            // id set to a magic of -1 is used to register a new instance
-            if(id != -1)
+            if(instanceFound)
             {
-                return Response.CommandFailed(@this.Identifier, "Invalid instance id");
+                return @this.Invoke(instance, GetPayloadData(payload));
+            }
+
+            if(id != IInstanceBasedCommand<T>.RegisterNewInstanceSpecialId)
+            {
+                return MessagePayload.Error(@this.Identifier, $"Invalid instance id {id}");
             }
 
             // requested instance registration
 
-            if(!TryGetMachine(@this, data, out var machine, out var response))
+            if(!TryGetMachine(@this, payload.Data, out var machine, out var response))
             {
                 return response;
             }
 
-            if(!TryGetName(@this.Identifier, data, NameOffset, out var name, out response))
+            if(!TryGetName(@this.Identifier, payload.Data, NameOffset, out var name, out response))
             {
                 return response;
             }
 
             if(!@this.TryRegisterInstance(machine, name, instanceFilter, out id))
             {
-                return Response.CommandFailed(@this.Identifier, "Instance not found");
+                return MessagePayload.Error(@this.Identifier, "Instance not found");
             }
 
-            return Response.Success(@this.Identifier, id.AsRawBytes());
+            return MessagePayload.Success(@this.Identifier, id.AsRawBytes());
         }
 
         public const int HeaderSize = InstanceIdSize;
@@ -85,71 +112,74 @@ namespace Antmicro.Renode.Network.ExternalControl
                 return false;
             }
 
-            @this.Instances.TryAdd((T)instance, out id);
+            lock(@this.Instances)
+            {
+                @this.Instances.TryAdd((T)instance, out id);
+            }
             return true;
         }
 
-        private static bool TryGetMachine(this ICommand @this, List<byte> data, out IMachine machine, out Response response)
+        private static bool TryGetMachine(this ICommand @this, byte[] data, out IMachine machine, out MessagePayload response)
         {
-            machine = default(IMachine);
-            response = default(Response);
+            machine = default;
+            response = default;
 
-            if(data.Count < MachineIdOffset + MachineIdSize)
+            if(data.Length < MachineIdOffset + MachineIdSize)
             {
-                response = Response.CommandFailed(@this.Identifier, $"Expected at least {MachineIdOffset + MachineIdSize} bytes of payload");
+                response = MessagePayload.Error(@this.Identifier, $"Expected at least {MachineIdOffset + MachineIdSize} bytes of payload");
                 return false;
             }
 
-            var id = BitConverter.ToInt32(data.GetRange(MachineIdOffset, MachineIdSize).ToArray(), 0);
+            var id = BitConverter.ToInt32(data[MachineIdOffset..]);
             if(@this.Machines?.TryGetMachine(id, out machine) ?? false)
             {
                 return true;
             }
 
-            response = Response.CommandFailed(@this.Identifier, "Invalid machine id");
+            response = MessagePayload.Error(@this.Identifier, "Invalid machine id");
             return false;
         }
 
-        private static bool TryDecodeNameLength(Command command, List<byte> data, int offset, out int length, out Response response)
+        private static bool TryDecodeNameLength(Command command, byte[] data, int offset, out int length, out MessagePayload response)
         {
-            response = default(Response);
+            response = default;
 
-            if(data.Count < offset + NameLengthSize)
+            if(data.Length < offset + NameLengthSize)
             {
                 length = default(int);
-                response = Response.CommandFailed(command, $"Expected at least {offset + NameLengthSize} bytes of payload");
+                response = MessagePayload.Error(command, $"Expected at least {offset + NameLengthSize} bytes of payload");
                 return false;
             }
 
-            length = BitConverter.ToInt32(data.GetRange(offset, NameLengthSize).ToArray(), 0);
+            length = BitConverter.ToInt32(data[offset..]);
 
             if(length <= 0)
             {
-                response = Response.CommandFailed(command, "Provided length value is illegal");
+                response = MessagePayload.Error(command, "Provided length value is illegal");
                 return false;
             }
 
             return true;
         }
 
-        private static bool TryDecodeName(Command command, List<byte> data, int offset, int length, out string name, out Response response)
+        private static bool TryDecodeName(Command command, byte[] data, int offset, int length, out string name, out MessagePayload response)
         {
-            name = default(string);
-            response = default(Response);
+            name = default;
+            response = default;
 
-            if(data.Count != offset + length)
+            if(data.Length != offset + length)
             {
-                response = Response.CommandFailed(command, $"Expected {offset + length} bytes of payload");
+                response = MessagePayload.Error(command, $"Expected {offset + length} bytes of payload");
                 return false;
             }
 
             try
             {
-                name = Encoding.UTF8.GetString(data.GetRange(offset, length).ToArray());
+                name = Encoding.UTF8.GetString(data[offset..][..length]);
             }
             catch(Exception)
             {
-                response = Response.CommandFailed(command, "Invalid name encoding");
+                response = MessagePayload.Error(command, "Invalid name encoding");
                 return false;
             }
 
@@ -168,9 +198,27 @@ namespace Antmicro.Renode.Network.ExternalControl
     public interface IInstanceBasedCommand<T> : ICommand
         where T : IEmulationElement
     {
+        public int GetExternalInstanceId(ExternalControlSocket externalControl, int machineId, string remoteInstance)
+        {
+            var data = BitConverter.GetBytes(RegisterNewInstanceSpecialId)
+                .Concat(BitConverter.GetBytes(machineId))
+                .Concat(IInstanceBasedCommandExtensions.EncodeString(remoteInstance));
+            var response = externalControl.SendRequest(new MessagePayload(Identifier, CommandType.Request, data.ToArray()));
+            response.ThrowOnError(Identifier);
+
+            if(response.Data.Length != sizeof(int))
+            {
+                throw new RecoverableException("Unexpected length of response: {response}");
+            }
+
+            return BitConverter.ToInt32(response.Data);
+        }
+
         InstanceCollection<T> Instances { get; }
 
-        Response Invoke(T instance, List<byte> data);
+        MessagePayload Invoke(T instance, ReadOnlySpan<Byte> payload);
+
+        public const int RegisterNewInstanceSpecialId = -1;
     }
 
     public class InstanceCollection<T>

@@ -9,11 +9,33 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+using Antmicro.Renode.Utilities;
+
+using Newtonsoft.Json;
 
 namespace Antmicro.Renode.WebSockets.Providers
 {
-    class FilesystemProvider : IWebSocketAPIProvider
+    public static class HttpClientExtensions
+    {
+        public static void DownloadFile(this HttpClient client, Uri address, WriteFilePath fileName)
+        {
+            client.DownloadFileAsync(address, fileName).GetAwaiter().GetResult();
+        }
+
+        public static async Task DownloadFileAsync(this HttpClient client, Uri address, WriteFilePath fileName)
+        {
+            var sourceStream = await client.GetStreamAsync(address);
+            using(var destinationStream = new FileStream(fileName, FileMode.CreateNew))
+            {
+                await sourceStream.CopyToAsync(destinationStream);
+            }
+        }
+    }
+
+    public class FilesystemProvider : IWebSocketAPIProvider
     {
         public FilesystemProvider()
         {
@@ -43,7 +65,7 @@ namespace Antmicro.Renode.WebSockets.Providers
 
                 return WebSocketAPIUtils.CreateActionResponse(result);
             }
-            catch(Exception e)
+            catch(Exception)
             {
                 return WebSocketAPIUtils.CreateEmptyActionResponse();
             }
@@ -165,7 +187,16 @@ namespace Antmicro.Renode.WebSockets.Providers
             try
             {
                 var fullPath = ResolvePath(args[0]);
-                File.Delete(fullPath);
+                var attr = File.GetAttributes(fullPath);
+
+                if(attr.HasFlag(FileAttributes.Directory))
+                {
+                    Directory.Delete(fullPath, true);
+                }
+                else
+                {
+                    File.Delete(fullPath);
+                }
 
                 var result = new PathActionResponseDto
                 {
@@ -235,14 +266,13 @@ namespace Antmicro.Renode.WebSockets.Providers
         {
             try
             {
-                var url = args[0];
-                var uri = new Uri(url);
+                var uri = new Uri(args[0]);
                 var fileName = System.IO.Path.GetFileName(uri.LocalPath);
                 var newFilePath = ResolvePath(fileName);
 
-                using(var client = new WebClient())
+                using(var client = new HttpClient())
                 {
-                    client.DownloadFile(url, newFilePath);
+                    client.DownloadFile(uri, newFilePath);
                 }
 
                 var result = new PathActionResponseDto
@@ -264,13 +294,12 @@ namespace Antmicro.Renode.WebSockets.Providers
         {
             try
             {
-                var url = args[0];
-                var uri = new Uri(url);
+                var uri = new Uri(args[0]);
                 var tempZipPath = ResolvePath("temp.zip");
 
-                using(var client = new WebClient())
+                using(var client = new HttpClient())
                 {
-                    client.DownloadFile(url, tempZipPath);
+                    client.DownloadFile(uri, tempZipPath);
                 }
 
                 ZipFile.ExtractToDirectory(tempZipPath, SharedData.Cwd.Value, true);
@@ -333,35 +362,49 @@ namespace Antmicro.Renode.WebSockets.Providers
 
         private class StatusActionResponseDto
         {
+            [JsonProperty("success")]
             public bool Success;
         }
 
         private class PathActionResponseDto
         {
+            [JsonProperty("success")]
             public bool Success;
+            [JsonProperty("path")]
             public string Path;
         }
 
         private class PathInfoDto
         {
+            [JsonProperty("name")]
             public string Name;
+            [JsonProperty("isfile")]
             public bool IsFile;
+            [JsonProperty("islink")]
             public bool IsLink;
         }
 
         private class MoveActionResponseDto
         {
+            [JsonProperty("success")]
             public bool Success;
+            [JsonProperty("from")]
             public string From;
+            [JsonProperty("to")]
             public string To;
         }
 
         private class StatActionResponseDto
         {
+            [JsonProperty("success")]
             public bool Success;
+            [JsonProperty("size")]
             public long Size;
+            [JsonProperty("isfile")]
             public bool IsFile;
+            [JsonProperty("ctime")]
             public float CTime;
+            [JsonProperty("mtime")]
             public float MTime;
         }
     }

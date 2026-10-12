@@ -5,11 +5,13 @@
 mkdir -p $DIR/{licenses,tests,tools,plugins}
 
 cp -r $BASE/tests/metrics-analyzer $DIR/tests/metrics-analyzer
+cp -r $BASE/tests/native-interface $DIR/tests/native-interface
+cp -r $BASE/tests/external-control $DIR/tests/external-control
 cp -r $BASE/tests/network-server $DIR/tests/network-server
 cp -r $BASE/tests/network-logging $DIR/tests/network-logging
 cp -r $BASE/tests/peripherals $DIR/tests/peripherals
 cp -r $BASE/tests/platforms $DIR/tests/platforms
-cp -r $BASE/tests/{robot_tests_provider,run_tests,tests_engine,robot_output_formatter,robot_output_formatter_verbose,helper,retry_and_timeout_listener}.py $DIR/tests
+cp -r $BASE/tests/{robot_tests_provider,run_tests,tests_engine,robot_output_formatter,robot_output_formatter_verbose,helper,retry_and_timeout_listener,segmenting,monitoring,unstable_tests,state_dependency_listener}.py $DIR/tests
 cp -r $BASE/tests/{renode-keywords,example}.robot $DIR/tests
 cp -r $BASE/tests/tools $DIR/tests/tools
 cp -r $BASE/tests/tests.yaml $DIR/tests/tests.yaml
@@ -21,10 +23,17 @@ cp -r $BASE/tools/metrics_analyzer $DIR/tools
 cp -r $BASE/tools/sel4_extensions $DIR/tools
 cp -r $BASE/tools/csv2resd $DIR/tools
 cp -r $BASE/tools/external_control_client $DIR/tools
+cp -r $BASE/tools/NativeInterface $DIR/tools
+rm -rf $DIR/tools/NativeInterface/example/build
+# Only the C example and CMake helpers are useful in the package (they are
+# used by the native-interface robot tests and serve as user documentation
+# for consuming librenode). third-party/DNNE and the C# project are only
+# needed to build librenode itself, which happens in the source tree.
+rm -rf $DIR/tools/NativeInterface/third-party $DIR/tools/NativeInterface/csharp
 cp -r $BASE/src/Plugins/CoSimulationPlugin/IntegrationLibrary $DIR/plugins
 # Copy required headers into the package and adjust the include
 cp -r $BASE/src/Infrastructure/src/Emulator/Cores/renode/include/{renode_imports,map}.h $DIR/plugins/IntegrationLibrary/src
-$SED_COMMAND s:../../../../Infrastructure/src/Emulator/Cores/renode/include/::g $DIR/plugins/IntegrationLibrary/src/renode_bus.h
+sed_inplace s:../../../../Infrastructure/src/Emulator/Cores/renode/include/::g $DIR/plugins/IntegrationLibrary/src/renode_bus.h
 cp -r $BASE/src/Plugins/SystemCPlugin/SystemCModule $DIR/plugins
 # For now, SystemCPlugin uses socket-cpp library from CoSimulationPlugin IntegrationLibrary.
 # ln -f argument is quietly ignored in windows-package environment, so instead of updating remove the link
@@ -37,15 +46,24 @@ cp $BASE/lib/resources/styles/robot.css $DIR/tests
 
 # Don't copy RenodeTests directory which contains nunit tests
 mkdir $DIR/tests/unit-tests
-find $BASE/tests/unit-tests \
-    -not -path "$BASE/tests/unit-tests" \
-    -not -path "$BASE/tests/unit-tests/RenodeTests" \
-    -not -path "$BASE/tests/unit-tests/RenodeTests/*" \
-    -exec cp -r "{}" "$DIR/tests/unit-tests/" \;
+cp -r "$BASE/tests/unit-tests/." "$DIR/tests/unit-tests"
+rm -rf "$DIR/tests/unit-tests/RenodeTests"
 
 $BASE/tools/packaging/common_copy_licenses.sh $DIR/licenses $OS_NAME
 $BASE/tools/packaging/common_copy_dts2repl_version_script.sh $BASE $DIR
 
 # `tests.yaml` without nunit tests
-$SED_COMMAND '/csproj$/d' $DIR/tests/tests.yaml
-$SED_COMMAND '/nunit/d' $DIR/tests/run_tests.py
+sed_inplace '/csproj$/d' $DIR/tests/tests.yaml
+sed_inplace '/nunit/d' $DIR/tests/run_tests.py
+
+function copy_windows_tests_scripts() {
+    BINDIR=$1
+    BINNAME=$2
+
+    cp $THIS_DIR/windows/renode-test.bat $DIR
+    TEST_SCRIPT=$DIR/tests/test.bat
+    cp $THIS_DIR/windows/test.bat $TEST_SCRIPT
+
+    sed_inplace "s#REPLACE_BIN_NAME#$BINNAME#" $TEST_SCRIPT
+    sed_inplace "s#REPLACE_BIN_DIR#$BINDIR#" $TEST_SCRIPT
+}

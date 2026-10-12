@@ -1,54 +1,49 @@
 //
-// Copyright (c) 2010-2024 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
 //
-using System;
-using System.Collections.Generic;
-
 namespace Antmicro.Renode.Network.ExternalControl
 {
-    public enum Command : byte
+    // Needs to be in sync with `api_command_t` in C
+    public enum Command : ushort
     {
-        RunFor = 1,
+        CheckVersion = 0,
+        RunFor,
         GetTime,
         GetMachine,
         ADC,
         GPIOPort,
+        SystemBus,
+        TimeElapsedCallback,
+        SPI,
+        CANBus,
+        CustomCommand,
     }
 
     public interface ICommand
     {
         Command Identifier { get; }
 
-        byte Version { get; }
-
         IMachineContainer Machines { get; }
 
-        Response Invoke(List<byte> data);
+        MessagePayload Invoke(MessagePayload payload);
     }
 
     public abstract class BaseCommand : ICommand
     {
-        public BaseCommand(ExternalControlServer parent)
+        public BaseCommand(ExternalControlSocket parent)
         {
             this.parent = parent;
         }
 
-        public abstract Response Invoke(List<byte> data);
+        public abstract MessagePayload Invoke(MessagePayload payload);
 
         public IMachineContainer Machines => parent.Machines;
 
         public abstract Command Identifier { get; }
 
-        public abstract byte Version { get; }
-
-        protected readonly ExternalControlServer parent;
-    }
-
-    public interface IHasEvents : ICommand
-    {
-        event Action<Response> EventReported;
+        protected readonly ExternalControlSocket parent;
     }
 }

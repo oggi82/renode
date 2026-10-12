@@ -9,16 +9,21 @@ flash: Memory.MappedMemory @ sysbus 0x40000000
 
 lapic: IRQControllers.LAPIC @ sysbus 0xFEE00000
     IRQ -> cpu@0
+    id: 0
 
 ioapic: IRQControllers.IOAPIC @ sysbus 0xFEC00000
-    [16-255] -> lapic@[16-255]
-    lapic: lapic
 
-spi0: SPI.Quark_SPI @ sysbus 0xB0001000
+spi0: SPI.DesignWare_SPI @ sysbus 0xB0001000
     IRQ -> ioapic@2
+    transmitDepth: 16
+    receiveDepth: 16
+    maxTransferSize: 32
 
-spi1: SPI.Quark_SPI @ sysbus 0xB0001400
+spi1: SPI.DesignWare_SPI @ sysbus 0xB0001400
     IRQ -> ioapic@3
+    transmitDepth: 16
+    receiveDepth: 16
+    maxTransferSize: 32
 
 flash2: Memory.MappedMemory @ sysbus 0x40030000
     size: 0x2F000
@@ -40,8 +45,9 @@ cpu: CPU.X86 @ sysbus
     cpuType: "x86"
     lapic: lapic
 
-gpio: X86.Quark_GPIOController @ sysbus 0xB0000C00
+gpio: GPIOPort.DesignWare_APB_GPIO @ sysbus 0xB0000C00
     IRQ -> ioapic@8
+    numberOfGPIOS: 32
 
 pwm: X86.Quark_PWM @ sysbus 0xB0000800
     IRQ -> ioapic@9

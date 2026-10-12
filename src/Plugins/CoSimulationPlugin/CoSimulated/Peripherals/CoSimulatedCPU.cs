@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2024 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -29,7 +29,7 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             CosimToRenodeIndex = 0;
 
             cosimConnection = new CoSimulationConnection(machine, "cpu_cosim_cosimConnection", 0,
-                        0, 0, address, 0, 0);
+                        0, 0, 0, address, 0, 0);
             cosimConnection.AttachTo(this);
 
             InitializeRegisters();
@@ -166,9 +166,10 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             get => SimulationFilePath;
             set
             {
-#if PLATFORM_LINUX
-                SimulationFilePath = value;
-#endif
+                if(RuntimeInfo.IsLinux())
+                {
+                    SimulationFilePath = value;
+                }
             }
         }
 
@@ -177,9 +178,10 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             get => SimulationFilePath;
             set
             {
-#if PLATFORM_WINDOWS
-                SimulationFilePath = value;
-#endif
+                if(RuntimeInfo.IsWindows())
+                {
+                    SimulationFilePath = value;
+                }
             }
         }
 
@@ -188,9 +190,10 @@ namespace Antmicro.Renode.Peripherals.CoSimulated
             get => SimulationFilePath;
             set
             {
-#if PLATFORM_OSX
-                SimulationFilePath = value;
-#endif
+                if(RuntimeInfo.IsMacOS())
+                {
+                    SimulationFilePath = value;
+                }
             }
         }
 

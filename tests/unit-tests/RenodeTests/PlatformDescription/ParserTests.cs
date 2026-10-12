@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -43,6 +43,65 @@ using ""other_file.pl8""";
 
             var usingEntries = result.Value.Usings.Select(x => x.Path.Value);
             CollectionAssert.AreEquivalent(new[] { "file.pl8", "other_file.pl8" }, usingEntries);
+        }
+
+        [Test]
+        public void ShouldParseUsingEntry2()
+        {
+            var source = @"
+using ""file.pl8"";
+using ""other_file.pl8""";
+
+            var input = GetInputFromString(source);
+            var result = Grammar.Description(input);
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var usingEntries = result.Value.Usings.Select(x => x.Path.Value);
+            CollectionAssert.AreEquivalent(new[] { "file.pl8", "other_file.pl8" }, usingEntries);
+        }
+
+        [Test]
+        public void ShouldParseUsingEntry3()
+        {
+            var source = @"
+using ""file.pl8""";
+
+            var input = GetInputFromString(source);
+            var result = Grammar.Description(input);
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var usingEntries = result.Value.Usings.Select(x => x.Path.Value);
+            CollectionAssert.AreEquivalent(new[] { "file.pl8" }, usingEntries);
+        }
+
+        [Test]
+        public void ShouldParseUsingEntry4()
+        {
+            var source = @"
+using ""file.pl8"";";
+
+            var input = GetInputFromString(source);
+            var result = Grammar.Description(input);
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var usingEntries = result.Value.Usings.Select(x => x.Path.Value);
+            CollectionAssert.AreEquivalent(new[] { "file.pl8" }, usingEntries);
+        }
+
+        [Test]
+        public void ShouldParseUsingEntry5()
+        {
+            var source = @"
+using ""first.pl8"";
+using ""second.pl8"";
+using ""third.pl8"";";
+
+            var input = GetInputFromString(source);
+            var result = Grammar.Description(input);
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var usingEntries = result.Value.Usings.Select(x => x.Path.Value);
+            CollectionAssert.AreEquivalent(new[] { "first.pl8", "second.pl8", "third.pl8" }, usingEntries);
         }
 
         [Test]
@@ -104,6 +163,24 @@ uart: @ sysbus ""something""";
         }
 
         [Test]
+        public void ShouldParseSingleRegistrationPointInBraces()
+        {
+            var source = @"
+uart: @{ sysbus 0x100 }";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldParseSingleRegistrationPointInBracesWithSemicolon()
+        {
+            var source = @"
+uart: @{ sysbus 0x100; }";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
         public void ShouldParseEntryWithManyRegistrationPoints()
         {
             var source = @"
@@ -124,6 +201,66 @@ uart: @{ sysbus 0x100;
         }
 
         [Test]
+        public void ShouldParseEntryWithManyRegistrationPointsWithSemicolons()
+        {
+            var source = @"
+uart: @{ sysbus 0x100;
+         sysbus 0x200;}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierRegistrationPointInBraces()
+        {
+            var source = @"
+uart: @{ _nonIdentifier }";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierRegistrationPointInBracesWithSemicolon()
+        {
+            var source = @"
+uart: @{ _nonIdentifier; }";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierRegistrationPointInBracesWithLeadingSemicolon()
+        {
+            var source = @"
+uart: @{ ;_nonIdentifier }";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnMultipleRegistrationPointsWithNonIdentifierInBracesWithSemicolons()
+        {
+            var source = @"
+uart: @{
+    sysbus 0x100;
+    sysbus 0x200;
+    _nonIdentifier
+}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldParseEntryWithManyAttributesWithSemicolons()
+        {
+            var source = @"
+other: Display @ sysbus <0x0, +0x100> { refreshMode: Automatic; -> ic@3; }
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
         public void ShouldParseEntryWithOneAttribute()
         {
             var source = @"
@@ -139,7 +276,129 @@ uart:
 
             var attribute = (ConstructorOrPropertyAttribute)entry.Attributes.Single();
             Assert.AreEqual("baudRate", attribute.Name);
+            var value = (EnumValue)attribute.Value;
+            Assert.AreEqual("BaudRate", value.TypeName);
+            Assert.AreEqual("B9600", value.Value);
+            Assert.IsTrue(value.IsFullyQualified);
+        }
+
+        [Test]
+        public void ShouldParseEntryWithNoAttrbutes()
+        {
+            var source = @"
+uart: {}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithNoAttrbutesAndSemicolon()
+        {
+            var source = @"
+uart: {;}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierInBraces()
+        {
+            var source = @"
+uart: {_nonIdentifier}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierInBracesAndSemicolon()
+        {
+            var source = @"
+uart: {;_nonIdentifier}";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldParseEntryWithOneAttributeInBraces()
+        {
+            var source = @"
+uart: {baudRate: BaudRate.B9600}
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var entry = result.Value.Entries.Single();
+            Assert.AreEqual("uart", entry.VariableName);
+            Assert.IsNull(entry.Type);
+
+            var attribute = (ConstructorOrPropertyAttribute)entry.Attributes.Single();
+            Assert.AreEqual("baudRate", attribute.Name);
             Assert.AreEqual("B9600", ((EnumValue)attribute.Value).Value);
+        }
+
+        [Test]
+        public void ShouldParseEntryWithOneAttributeInBracesWithSemicolon()
+        {
+            var source = @"
+uart: {baudRate: BaudRate.B9600;}
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var entry = result.Value.Entries.Single();
+            Assert.AreEqual("uart", entry.VariableName);
+            Assert.IsNull(entry.Type);
+
+            var attribute = (ConstructorOrPropertyAttribute)entry.Attributes.Single();
+            Assert.AreEqual("baudRate", attribute.Name);
+            Assert.AreEqual("B9600", ((EnumValue)attribute.Value).Value);
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithOneAttributeInBracesWithMultipleSemicolons()
+        {
+            var source = @"
+uart: {baudRate: BaudRate.B9600;;}
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnNonIdentifierWithWithMultipleSemicolons()
+        {
+            var source = @"
+uart: {_nonIdentifier;;}
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithEmptyStatementAndOneAttributeInBracesWithSemicolon()
+        {
+            var source = @"
+uart: {; baudRate: BaudRate.B9600;}
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldParseEntryWithShorthandEnumValue()
+        {
+            var source = @"
+uart:
+    baudRate: .B9600
+";
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var entry = result.Value.Entries.Single();
+            var attribute = (ConstructorOrPropertyAttribute)entry.Attributes.Single();
+            var value = (EnumValue)attribute.Value;
+            Assert.AreEqual("B9600", value.Value);
+            Assert.IsFalse(value.IsFullyQualified);
         }
 
         [Test]
@@ -157,6 +416,80 @@ uart:
             var entry = result.Value.Entries.Single();
             var attributes = entry.Attributes;
             Assert.AreEqual(2, attributes.Count());
+        }
+
+        [Test]
+        public void ShouldParseEntryWithTwoAttributesInBracesAndOneSemicolon()
+        {
+            var source = @"
+uart: {
+    friendlyName: ""some name"";
+    size: 0x1000
+}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var entry = result.Value.Entries.Single();
+            var attributes = entry.Attributes;
+            Assert.AreEqual(2, attributes.Count());
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithAttributeAndNonIdentifierInBraces()
+        {
+            var source = @"
+uart: {
+    friendlyName: ""some name"";
+    _nonIdentifier
+}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldParseEntryWithTwoAttributesInBracesAndAllSemicolons()
+        {
+            var source = @"
+uart: {
+    friendlyName: ""some name"";
+    size: 0x1000;
+}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var entry = result.Value.Entries.Single();
+            var attributes = entry.Attributes;
+            Assert.AreEqual(2, attributes.Count());
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithTwoAttributesInBracesWithTrailingSemicolon()
+        {
+            var source = @"
+uart: {
+    friendlyName: ""some name"";
+    size: 0x1000;
+};";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
+        }
+
+        [Test]
+        public void ShouldFailOnEntryWithTwoAttributesAndNonIdentifierInBracesAndSemicolons()
+        {
+            var source = @"
+uart: {
+    friendlyName: ""some name"";
+    size: 0x1000;
+    _nonIdentifier
+}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsFalse(result.WasSuccessful, result.ToString());
         }
 
         [Test]
@@ -418,23 +751,6 @@ local other: Other";
         }
 
         [Test]
-        public void ShouldHandlePrefixedUsing()
-        {
-            var source = @"
-using ""file1""
-using ""file2"" prefixed ""prefix_""";
-
-            var result = Grammar.Description(GetInputFromString(source));
-            Assert.IsTrue(result.WasSuccessful, result.ToString());
-
-            var usings = result.Value.Usings.ToArray();
-            Assert.AreEqual("file1", usings[0].Path.Value);
-            Assert.AreEqual("file2", usings[1].Path.Value);
-            Assert.IsNull(usings[0].Prefix);
-            Assert.AreEqual("prefix_", usings[1].Prefix);
-        }
-
-        [Test]
         public void ShouldParseExample()
         {
             var source = @"
@@ -503,6 +819,10 @@ device: SomeDevice";
 device: Something @ somewhere
     BoolProp: true
     BoolProp2: false
+    BoolProp3: True
+    BoolProp4: False
+    BoolProp5: tRue
+    BoolProp6: FALSE
 ";
 
             var result = Grammar.Description(GetInputFromString(source));
@@ -510,9 +830,18 @@ device: Something @ somewhere
 
             var values = result.Value.Entries.Single().Attributes.OfType<ConstructorOrPropertyAttribute>()
                                    .Select(x => x.Value).OfType<BoolValue>().ToArray();
-            Assert.AreEqual(2, values.Length);
+            Assert.AreEqual(4, values.Length);
             Assert.AreEqual(true, values[0].Value);
             Assert.AreEqual(false, values[1].Value);
+            Assert.AreEqual(true, values[2].Value);
+            Assert.AreEqual(false, values[3].Value);
+
+            // The boolean values with invalid casing should be parsed as ReferenceValues
+            var wrongValues = result.Value.Entries.Single().Attributes.OfType<ConstructorOrPropertyAttribute>()
+                .Select(x => x.Value).OfType<ReferenceValue>().ToArray();
+            Assert.AreEqual(2, wrongValues.Length);
+            Assert.AreEqual("tRue", wrongValues[0].Value);
+            Assert.AreEqual("FALSE", wrongValues[1].Value);
         }
 
         [Test]
@@ -644,6 +973,112 @@ uart:
             var attribute = (ConstructorOrPropertyAttribute)entry.Attributes.Single();
             Assert.AreEqual("string", attribute.Name);
             Assert.AreEqual(@"\escaped backslash: \, two in a row: \\, before quote: \"", and one at the end: \", ((StringValue)attribute.Value).Value);
+        }
+
+        [Test]
+        public void ShouldParseEmptyDict()
+        {
+            var source = @"
+device: Something
+    dict: {}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var attribute = result.Value.Entries.Single().Attributes.OfType<ConstructorOrPropertyAttribute>().Single();
+            var dict = (DictValue)attribute.Value;
+
+            Assert.IsEmpty(dict.Items);
+        }
+
+        [Test]
+        public void ShouldParseSimpleDict()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"": 0; ""key1"": 1}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var attribute = result.Value.Entries.Single().Attributes.OfType<ConstructorOrPropertyAttribute>().Single();
+            var dict = (DictValue)attribute.Value;
+
+            Assert.AreEqual(2, dict.Items.Count());
+            for(var i = 0; i < dict.Items.Count(); i++)
+            {
+                Assert.AreEqual($"key{i}", ((StringValue)(dict.Items.Keys.ToArray()[i])).Value);
+                Assert.AreEqual($"{i}", ((NumericalValue)(dict.Items.Values.ToArray()[i])).Value);
+            }
+        }
+
+        [Test]
+        public void ShouldParseDictWithTrailingSeparator()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"": 0; ""key1"": 1;}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(result.WasSuccessful, result.ToString());
+
+            var attribute = result.Value.Entries.Single().Attributes.OfType<ConstructorOrPropertyAttribute>().Single();
+            var dict = (DictValue)attribute.Value;
+
+            Assert.AreEqual(2, dict.Items.Count());
+            for(var i = 0; i < dict.Items.Count(); i++)
+            {
+                Assert.AreEqual($"key{i}", ((StringValue)(dict.Items.Keys.ToArray()[i])).Value);
+                Assert.AreEqual($"{i}", ((NumericalValue)(dict.Items.Values.ToArray()[i])).Value);
+            }
+        }
+
+        [Test]
+        public void ShouldNotParseDictWithMissingClosingBrace()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"": 0; ""key1"": 1";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(!result.WasSuccessful, result.ToString());
+            StringAssert.Contains("Unexpected end of input", result.Message);
+        }
+
+        [Test]
+        public void ShouldNotParseDictWithComma()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"": 0, ""key1"": 1}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(!result.WasSuccessful, result.ToString());
+            StringAssert.Contains("unexpected ','", result.Message);
+        }
+
+        [Test]
+        public void ShouldNotParseDictWithMissingSeparator()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"": 0 ""key1"": 1}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(!result.WasSuccessful, result.ToString());
+            StringAssert.Contains(@"unexpected '""'", result.Message);
+        }
+
+        [Test]
+        public void ShouldNotParseDictWithMissingColon()
+        {
+            var source = @"
+device: Something
+    dict: {""key0"" 0, ""key1"": 1}";
+
+            var result = Grammar.Description(GetInputFromString(source));
+            Assert.IsTrue(!result.WasSuccessful, result.ToString());
+            StringAssert.Contains("unexpected '0'", result.Message);
         }
 
         private static IInput GetInputFromString(string source)

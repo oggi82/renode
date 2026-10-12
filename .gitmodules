@@ -19,9 +19,6 @@
 [submodule "lib/Migrant"]
 	path = lib/Migrant
 	url = https://github.com/antmicro/Migrant.git
-[submodule "lib/cctask"]
-	path = lib/cctask
-	url = https://github.com/antmicro/cctask.git
 [submodule "lib/options-parser"]
 	path = lib/options-parser
 	url = https://github.com/antmicro/options-parser
@@ -44,3 +41,9 @@
 [submodule "tools/models_analyzer"]
 	path = tools/models_analyzer
 	url = https://github.com/antmicro/renode-models-analyzer.git
+[submodule "src/UI"]
+	path = src/UI
+	url = https://github.com/antmicro/renode-ui.git
+[submodule "tools/NativeInterface/third-party/DNNE"]
+	path = tools/NativeInterface/third-party/DNNE
+	url = https://github.com/antmicro/DNNE

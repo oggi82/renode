@@ -111,10 +111,12 @@ rtc: Timers.STM32F4_RTC @ sysbus 0x40002800
     WakeupIRQ -> exti@20
 
 spi1: SPI.STM32SPI @ sysbus 0x40013000
+    series: STM32Series.L0
     bufferCapacity: 1
     IRQ ->nvic@25
 
 spi2: SPI.STM32SPI @ sysbus 0x40003800
+    series: STM32Series.L0
     bufferCapacity: 1
     IRQ ->nvic@26
 
@@ -231,6 +233,47 @@ timer21:
 timer22:
     0 -> gpioPortA#06@5 | gpioPortB#04@4 | gpioPortC#06@0 | gpioPortE#03@0
     1 -> gpioPortA#07@5 | gpioPortB#05@4 | gpioPortC#07@0 | gpioPortE#04@0
+
+gpioPortA:
+    0 -> timer2@00
+    1 -> timer2@01
+    2 -> timer2@02 | timer21@00
+    3 -> timer2@03 | timer21@01
+    5 -> timer2@00
+    6 -> timer3@00 | timer22@00
+    7 -> timer3@01 | timer22@01
+    15 -> timer2@00
+
+gpioPortB:
+    0 -> timer3@02
+    1 -> timer3@03
+    3 -> timer2@01
+    4 -> timer3@00 | timer22@00
+    5 -> timer3@01 | timer22@01
+    10 -> timer2@02
+    11 -> timer2@03
+    13 -> timer21@00
+    14 -> timer21@01
+
+gpioPortC:
+    6 -> timer3@00 | timer22@00
+    7 -> timer3@01 | timer22@01
+    8 -> timer3@02
+    9 -> timer3@03
+
+gpioPortD:
+    0 -> timer21@00
+    7 -> timer21@01
+
+gpioPortE:
+    3 -> timer3@00 | timer22@00
+    4 -> timer3@01 | timer22@01
+    5 -> timer3@02 | timer21@00
+    6 -> timer3@03 | timer21@01
+    9 -> timer2@00
+    10 -> timer2@01
+    11 -> timer2@02
+    12 -> timer2@03
 
 sysbus:
     init:

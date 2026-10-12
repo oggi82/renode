@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -13,7 +13,7 @@ using Sprache;
 
 namespace Antmicro.Renode.PlatformDescription.Syntax
 {
-    public class Entry : IPositionAware<Entry>, IWithPosition, IPrefixable, IScriptable
+    public class Entry : IPositionAware<Entry>, IWithPosition, IScriptable
     {
         public Entry(string variableName, StringWithPosition type, IEnumerable<RegistrationInfo> registrationInfo, IEnumerable<Attribute> attributes, bool isLocal, StringWithPosition alias)
         {
@@ -24,19 +24,18 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
             Attributes = attributes;
             IsLocal = isLocal;
             Alias = alias;
+
+            foreach(var attribute in attributes)
+            {
+                attribute.OriginalEntry = this;
+            }
         }
 
         public Entry SetPos(Position startPos, int length)
         {
-            var copy = SerializationProvider.Instance.DeepClone(this);
-            copy.StartPosition = startPos;
-            copy.Length = length;
-            return copy;
-        }
-
-        public void Prefix(string with)
-        {
-            VariableName = with + baseVariableName;
+            StartPosition = startPos;
+            Length = length;
+            return this;
         }
 
         public Entry MergeWith(Entry entry)
@@ -71,11 +70,20 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
                 // then all attributes from second entry
                 mergedAttributes.AddRange(entry.Attributes.OfType<ConstructorOrPropertyAttribute>());
 
-                // since interrupts are already flattened, we can merge them the same way as property attributes
-                mergedAttributes.AddRange(Attributes.OfType<IrqAttribute>()
-                                          .Where(x => !entry.Attributes.OfType<IrqAttribute>()
-                                                 .Any(y => x.Sources.Single().Ends.Single() == y.Sources.Single().Ends.Single())));
+                // add all interrupts from both entries for validation and flattening later
+                mergedAttributes.AddRange(Attributes.OfType<IrqAttribute>());
                 mergedAttributes.AddRange(entry.Attributes.OfType<IrqAttribute>());
+
+                var ourPreinit = Attributes.OfType<PreinitAttribute>().SingleOrDefault();
+                var theirPreinit = entry.Attributes.OfType<PreinitAttribute>().SingleOrDefault();
+                if(ourPreinit == null ^ theirPreinit == null)
+                {
+                    mergedAttributes.Add(ourPreinit ?? theirPreinit);
+                }
+                else if(ourPreinit != null)
+                {
+                    mergedAttributes.Add(ourPreinit.Merge(theirPreinit));
+                }
 
                 var ourInit = Attributes.OfType<InitAttribute>().SingleOrDefault();
                 var theirInit = entry.Attributes.OfType<InitAttribute>().SingleOrDefault();
@@ -106,34 +114,39 @@ namespace Antmicro.Renode.PlatformDescription.Syntax
 
         public void FlattenIrqAttributes()
         {
-            // one must (and should) flatten attributes after premerge validation and before merge
             var multiplexedAttributes = Attributes.OfType<IrqAttribute>();
-            var result = new List<IrqAttribute>();
+            var result = new Dictionary<SingleOrMultiIrqEnd, List<IrqAttribute>>();
             Func<SingleOrMultiIrqEnd, IEnumerable<SingleOrMultiIrqEnd>> selector = x => x.Ends.Select(y => x.WithEnds(new[] { y }));
             foreach(var multiplexedAttribute in multiplexedAttributes)
             {
                 var sourcesAsArray = multiplexedAttribute.Sources.SelectMany(selector).ToArray();
                 foreach(var attribute in multiplexedAttribute.Destinations)
                 {
-                    // Irq -> none
+                    // Irq -> none removes all previous connections for that source
                     if(attribute.DestinationPeripheral == null)
                     {
-                        result.Add(multiplexedAttribute);
+                        foreach(var source in sourcesAsArray)
+                        {
+                            if(result.TryGetValue(source, out var list))
+                            {
+                                list.Clear();
+                            }
+                        }
                         continue;
                     }
                     var destinationsAsArray = attribute.Destinations.SelectMany(selector).ToArray();
                     for(var i = 0; i < sourcesAsArray.Length; i++)
                     {
-                        result.Add(multiplexedAttribute.SingleAttributeWithInheritedPosition(sourcesAsArray[i], attribute.DestinationPeripheral, destinationsAsArray[i]));
+                        var source = sourcesAsArray[i];
+                        if(!result.ContainsKey(source))
+                        {
+                            result[source] = [];
+                        }
+                        result[source].Add(multiplexedAttribute.SingleAttributeWithInheritedPosition(sourcesAsArray[i], attribute.DestinationPeripheral, destinationsAsArray[i]));
                     }
                 }
             }
-            Attributes = Attributes.Except(multiplexedAttributes).Concat(result).ToArray();
-        }
-
-        public Entry MakeShallowCopy()
-        {
-            return new Entry(VariableName, Type, RegistrationInfos, Attributes, IsLocal, Alias);
+            Attributes = Attributes.Except(multiplexedAttributes).Concat(result.Values.SelectMany(v => v)).ToArray();
         }
 
         public string VariableName { get; private set; }

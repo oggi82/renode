@@ -5,6 +5,7 @@ Suite Setup                   Get Test Cases
 ${platforms_path}=            ${CURDIR}${/}..${/}..${/}platforms
 @{pattern}=                   *.repl
 ${invalid_using_error}=       REGEXP: (?s:.)* Using 'invalid' does not exist(?s:.)*
+${abstract_type_error}=       REGEXP: (?s:.)* Antmicro.Renode.Peripherals.CPU.TranslationCPU is an abstract type. Try constructing one of the following concrete types: (?s:.)*
 ${eq}=                        ==
 # Some repls are not standalone and need to be included by other repls with "using" syntax
 # or added dynamically to the existing platform with "machine LoadPlatformDescription" command.
@@ -17,6 +18,10 @@ ${eq}=                        ==
 ...                           ${platforms_path}${/}boards${/}stm32f4_discovery-bb.repl
 ...                           ${platforms_path}${/}boards${/}zedboard-externals.repl
 ...                           ${platforms_path}${/}boards${/}vexpress-externals.repl
+...                           ${platforms_path}${/}boards${/}ramn${/}BODY.repl
+...                           ${platforms_path}${/}boards${/}ramn${/}GATEWAY.repl
+...                           ${platforms_path}${/}boards${/}ramn${/}CHASSIS.repl
+...                           ${platforms_path}${/}boards${/}ramn${/}POWERTRAIN.repl
 
 *** Keywords ***
 Get Test Cases
@@ -25,6 +30,7 @@ Get Test Cases
     &{conditional_blacklist}=          Create Dictionary
     ...  ${platforms_path}${/}cpus${/}x86-kvm.repl                   '{system}' ${eq} 'Linux' and '{arch}' ${eq} 'x64'
     ...  ${platforms_path}${/}cpus${/}x86_64-kvm.repl                '{system}' ${eq} 'Linux' and '{arch}' ${eq} 'x64'
+    ...  ${platforms_path}${/}cpus${/}x86_64-kvm-virtio.repl         '{system}' ${eq} 'Linux' and '{arch}' ${eq} 'x64'
 
     ${system}=                Evaluate    platform.system()    modules=platform
     ${arch}=                  Evaluate    'arm' if platform.machine() in ['aarch64', 'arm64'] else 'x64'    modules=platform
@@ -62,3 +68,10 @@ Should Gracefully Fail At Invalid Using
   Execute Command               mach create
   Run Keyword And Expect Error  ${invalid_using_error}  Execute Command  machine LoadPlatformDescriptionFromString "using \\"invalid\\""
 
+Should Not Crash On Empty Platform String
+    Execute Command          mach create
+    Execute Command          machine LoadPlatformDescriptionFromString ""
+
+Should Gracefully Fail At Abstract Class Construction
+    Execute Command            mach create
+    Run Keyword And Expect Error  ${abstract_type_error}  Execute Command  machine LoadPlatformDescriptionFromString "cpu: CPU.TranslationCPU {}"

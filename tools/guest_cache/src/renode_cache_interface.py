@@ -51,8 +51,7 @@ class RenodeLogInterface:
         Renode ExecutionTracer outputs the following data:
 
         * `PC`: `OPCODE`
-        * Memory{Write, Read} with address `ADDR`
-        * MemoryIO{Write, Read} with address `ADDR`
+        * {OperationType} with address 0x{OperationTargetVirtual:X}, value 0x{OperationValue:X}
         """
 
         lines = sum(1 for i in open(self.fname, 'rb'))
@@ -68,10 +67,10 @@ class RenodeLogInterface:
                         getattr(self, f'l1{cache_type}').flush()
                     self.l1i.read(pc)
                 # Handle I/O access
-                # Memory{Read, Write} with address 0xADDRESS
+                # Memory{Read, Write} with address 0xADDRESS, value 0xVALUE
                 elif line.startswith('Memory') and self.l1d is not None:
                     parts = line.split()
-                    address = int(parts[-1], 16)
+                    address = int(parts[3].removesuffix(","), 16)
                     match parts[0].lower().removeprefix('memory'):
                         case 'iowrite':
                             if self.invalidate_on_io:

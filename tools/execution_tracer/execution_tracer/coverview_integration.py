@@ -12,7 +12,7 @@ import json
 from typing import TextIO
 from datetime import datetime
 from execution_tracer.common_utils import extract_common_prefix, remove_prefix
-from execution_tracer.dwarf import Coverage
+from execution_tracer.coverage import Coverage
 
 def create_coverview_archive(path: TextIO, coverage_config: Coverage, coverview_dict: str, *, tests_as_total: bool, warning_threshold: str, remove_common_path_prefix: bool = False) -> bool:
     merge_config = {}
@@ -29,10 +29,15 @@ def create_coverview_archive(path: TextIO, coverage_config: Coverage, coverview_
     if os.path.splitext(path.name)[1] != '.zip':
         print('Ensure that the file will have ".zip" extension. Coverview might not handle the file properly otherwise!')
 
+    coverage_name = (
+        coverage_config.test_name
+        if len(coverage_config.test_name)
+        else "coverage"
+    )
     with zipfile.ZipFile(path.name, 'w') as archive:
         # In case of very large coverage files it might be better to create a temporary file instead of in-memory string
-        info_filename = 'coverage.info'
-        desc_filename = 'coverage.desc'
+        info_filename = f'{coverage_name}.info'
+        desc_filename = f'{coverage_name}.desc'
         archive.writestr(
             info_filename,
             '\n'.join(line for line in coverage_config.get_lcov_printed_report(remove_common_path_prefix=remove_common_path_prefix))
@@ -44,7 +49,7 @@ def create_coverview_archive(path: TextIO, coverage_config: Coverage, coverview_
 
         config_file = {
             "datasets": {
-                "application": {
+                coverage_name: {
                     "line": [info_filename, desc_filename]
                 }
             },

@@ -4,7 +4,7 @@ Library                             String
 *** Variables ***
 ${URL}                              https://dl.antmicro.com/projects/renode
 ${GPT_ELF}                          ${URL}/renesas-rzg2l_evk--fsp-gpt_rzg2l_evk_ep.elf-s_450148-fec1da811a52fa94d39db555d0dccc28e246d28e
-${GTM_ELF}                          ${URL}/renesas-rzg2l_evk--fsp-gtm_rzg2l_evk_ep.elf-s_415532-a907c69248cf6f695c717ee7dd83cc29d6fff3b4
+${GTM_ELF}                          ${URL}/renesas-rzg2l_evk--fsp-gtm_rzg2l_evk_ep.elf-s_415524-b674298acfb6547da1e392f9f41a562f2bc5b74f
 ${SCIF_UART_ELF}                    ${URL}/renesas-rzg2l_evk--fsp-scif_uart_rzg2l_evk_ep.elf-s_494948-c7ab4fdc0f2f8e62b8d99f194aab234ab1a50a32
 ${RSPI_ELF}                         ${URL}/renesas-rzg2l_evk--fsp-rspi_rzg2l_evk_ep.elf-s_431540-f07dc0ce78537eda672af3a028c50dcb3f21f3a5
 ${FREERTOS_BLINKY_ELF}              ${URL}/renesas-rz_g2l--fsp-blinky_freertos.elf-s_612428-2a79e42c3efdbc19207a7c1b2b3b3824e450b2ef
@@ -51,6 +51,11 @@ Prepare LED Tester
     Execute Command                 machine LoadPlatformDescriptionFromString ${LED_REPL}
     Create Led Tester               sysbus.gpio.led
 
+Execute Linux Command
+    [Arguments]                     ${command}
+    Write Line To Uart              ${command}  waitForEcho=false
+    Wait For Prompt On Uart         root@smarc-rzg2l:~#  timeout=600
+
 *** Test Cases ***
 Should Run The Timer In One Shot Mode
     Prepare Machine                 ${GPT_ELF}
@@ -81,10 +86,10 @@ Should Run GTM Sample
     Wait For Line On Uart           GTM1 is Enabled in Periodic mode
     FOR  ${i}  IN RANGE  0  3
         ${periodic_start}=              Wait For Line On Uart  Leds are: Off
-        Assert Led State                False  timeout=0.01
+        Assert Led State                False  timeout=0
 
         ${periodic_end}=                Wait For Line On Uart  Leds are: On
-        Assert Led State                True  timeout=0.01
+        Assert Led State                True  timeout=0
         Elapsed Time Equals             ${periodic_start.Timestamp}  ${periodic_end.Timestamp}  5  0.3
     END
 
@@ -255,6 +260,7 @@ Should Boot Linux
 
     # Boot Linux
     Wait For Line On Uart           Booting Linux on physical CPU 0x0000000000 [0x411fd050]
+    Wait For Line On Uart           SMP: Total of 2 processors activated.
     Wait For Prompt On Uart         buildroot login:  timeout=140
     Write Line To Uart              root
 
@@ -270,3 +276,27 @@ Should Run Zephyr Shell Module Sample
     Wait For Prompt On Uart         uart:~$
     Write Line To Uart              demo board
     Wait For Line On Uart           rzg2l_smarc
+
+Should Run OpenAMP Echo Sample
+    Execute Command                 include @scripts/single-node/rzg2l_openamp.resc
+
+    #Can set defaultPauseEmulation=true when #84075 is fixed (but it will cost around a minute in test duration)
+    Create Terminal Tester          sysbus.scif0  defaultPauseEmulation=false
+    Execute Command                 showAnalyzer sysbus.scif0
+
+    Wait For Prompt On Uart         smarc-rzg2l login:  timeout=900
+    Execute Linux Command           root
+    Execute Linux Command           echo rzg2l_cm33_rpmsg_linux-rtos_demo.elf > /sys/class/remoteproc/remoteproc0/firmware
+    Execute Linux Command           echo start > /sys/class/remoteproc/remoteproc0/state
+    Write Line To Uart              rpmsg_sample_client
+    Wait For Line On Uart           please input
+    Wait For Line On Uart           >  includeUnfinishedLine=true
+    Write Line To Uart              1
+
+    FOR  ${i}  IN RANGE  0  471
+        Wait For Line On Uart           sending payload number ${i} of size ${i + 17}
+        Wait For Line On Uart           echo test: sent : ${i + 17}
+        Wait For Line On Uart           received payload number ${i} of size ${i + 17}
+    END
+    Wait For Line On Uart           Test Results: Error count = 0
+

@@ -15,6 +15,14 @@ ${PLAT}                             SEPARATOR=\n  """
 ...                                 ${SPACE*4}${SPACE*4}RegisterTCMRegion sysbus.btcm0 1
 ...                                 ${SPACE*4}${SPACE*4}RegisterTCMRegion sysbus.ctcm0 2
 ...
+...                                 # A dummy CPU to make sure remapping memory works in multi-CPU scenarios
+...                                 cpu_dummy: CPU.ARMv8R @ sysbus
+...                                 ${SPACE*4}cpuType: "cortex-r52"
+...                                 ${SPACE*4}genericInterruptController: gic
+...                                 ${SPACE*4}cpuId: 1
+...                                 ${SPACE*4}init:
+...                                 ${SPACE*4}${SPACE*4}IsHalted true
+...
 ...                                 timer: Timers.ARM_GenericTimer @ cpu
 ...                                 ${SPACE*4}frequency: 1000000000
 ...                                 ${SPACE*4}EL1PhysicalTimerIRQ -> gic#0@30
@@ -88,6 +96,26 @@ ${TCM_TEST_ASSEMBLY}                SEPARATOR=\n  """
 ...                                 B .
 ...                                 """
 
+# This snippet assumes that target EL configuration is in R1
+${TCM_EL_ACCESS_TEST_ASSEMBLY}      SEPARATOR=\n  """
+...                                 // Store mask in R2
+...                                 MVN r2, 0x3
+...
+...                                 // Enable TCM at given EL
+...                                 MRC p15, 0, r0, c9, c1, 0
+...                                 AND r0, r2
+...                                 ORR r0, r1
+...                                 MCR p15, 0, r0, c9, c1, 0
+...
+...                                 read_label:
+...                                 // Read values to registers
+...                                 MOV r0, 0x0
+...                                 LDR r0, [r0] // ${TCM_A_VALUE}
+...
+...                                 // Loop indefinitely
+...                                 B read_label
+...                                 """
+
 ${R0_REGISTER_INDEX}                100
 ${R1_REGISTER_INDEX}                101
 ${R2_REGISTER_INDEX}                102
@@ -111,6 +139,7 @@ Field Should Have Correct Value
     Should Be Equal As Integers     ${field_value}  ${expected_value}  ${error_message}
 
 Create Machine
+    Test Setup
     Execute Command                 mach create
     Execute Command                 machine LoadPlatformDescriptionFromString ${PLAT}
     Execute Command                 using sysbus
@@ -136,10 +165,62 @@ IMP_.TCMREGIONR Should Have Correct Value
    "IMP_CTCMREGIONR"  0  0xFFFFF000  0x40000  TCM C region base address mismatch
 
 Should Remap TCM Regions
-    Execute Command                 cpu AssembleBlock ${CODE_BASE_ADDRESS} ${TCM_TEST_ASSEMBLY}
+    Execute Command                 cpu AssembleBlock ${CODE_BASE_ADDRESS} ${TCM_TEST_ASSEMBLY} triple="armv8r"
     Execute Command                 cpu PC ${CODE_BASE_ADDRESS}
     Execute Command                 emulation RunFor "0.01"
 
-    Register Should Be Equal        ${R0_REGISTER_INDEX}  ${TCM_A_VALUE}
-    Register Should Be Equal        ${R1_REGISTER_INDEX}  ${TCM_B_VALUE}
-    Register Should Be Equal        ${R2_REGISTER_INDEX}  ${TCM_C_VALUE}
+    Register Should Be Equal        ${R0_REGISTER_INDEX}  ${TCM_A_VALUE}  cpuName=cpu
+    Register Should Be Equal        ${R1_REGISTER_INDEX}  ${TCM_B_VALUE}  cpuName=cpu
+    Register Should Be Equal        ${R2_REGISTER_INDEX}  ${TCM_C_VALUE}  cpuName=cpu
+
+Should Disable TCM Region At EL0 and EL1
+    Create Log Tester               0
+
+    Execute Command                 cpu PC ${CODE_BASE_ADDRESS}
+    Execute Command                 cpu AssembleBlock `cpu PC` ${TCM_EL_ACCESS_TEST_ASSEMBLY} triple="armv8r"
+    Execute Command                 cpu SetRegister "R1" 0x2
+
+    Execute Command                 allowPrivates true
+
+    Execute Command                 cpu Step 5
+
+    Execute Command                 cpu ExceptionLevel EL2_HypervisorMode
+    Execute Command                 cpu Step 3
+    Should Not Be In Log            sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  ${TCM_A_VALUE}  cpuName=cpu
+
+    Execute Command                 cpu ExceptionLevel EL1_SystemMode
+    Execute Command                 cpu Step 3
+    Wait For Log Entry              sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  0  cpuName=cpu
+
+    Execute Command                 cpu ExceptionLevel EL0_UserMode
+    Execute Command                 cpu Step 3
+    Wait For Log Entry              sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  0  cpuName=cpu
+
+Should Disable TCM Region At EL2
+    Create Log Tester               0
+
+    Execute Command                 cpu PC ${CODE_BASE_ADDRESS}
+    Execute Command                 cpu AssembleBlock `cpu PC` ${TCM_EL_ACCESS_TEST_ASSEMBLY} triple="armv8r"
+    Execute Command                 cpu SetRegister "R1" 0x1
+
+    Execute Command                 allowPrivates true
+
+    Execute Command                 cpu Step 5
+
+    Execute Command                 cpu ExceptionLevel EL2_HypervisorMode
+    Execute Command                 cpu Step 3
+    Wait For Log Entry              sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  0  cpuName=cpu
+
+    Execute Command                 cpu ExceptionLevel EL1_SystemMode
+    Execute Command                 cpu Step 3
+    Should Not Be In Log            sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  ${TCM_A_VALUE}  cpuName=cpu
+
+    Execute Command                 cpu ExceptionLevel EL0_UserMode
+    Execute Command                 cpu Step 3
+    Should Not Be In Log            sysbus: Tried to read 4 bytes at 0x0, with incorrect permissions, returning 0.
+    Register Should Be Equal        R0  ${TCM_A_VALUE}  cpuName=cpu

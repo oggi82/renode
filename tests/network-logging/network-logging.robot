@@ -2,15 +2,15 @@
 Library                             telnet_library.py
 
 *** Variables ***
+${RENODE_LOG_PORT}                  3341
 ${READ_END_MARKER}                  TEST
 
 *** Test Cases ***
 Should Attach To Server Socket Terminal
     Execute Command                 mach create
 
-    ${RENODE_LOG_PORT}=             Find Free Port
     Execute Command                 logNetwork ${RENODE_LOG_PORT}
-    Telnet Connect                  ${RENODE_LOG_PORT}
+    Telnet Connect                  port=${RENODE_LOG_PORT}
 
     Execute Command                 log "${READ_END_MARKER}"
 

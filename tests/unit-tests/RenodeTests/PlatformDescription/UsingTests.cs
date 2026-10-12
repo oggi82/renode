@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2025 Antmicro
+// Copyright (c) 2010-2026 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -79,41 +79,6 @@ cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU
     OtherCpu: otherCpu";
 
             ProcessSource(null, source, a);
-        }
-
-        [Test]
-        public void ShouldFindPrefixedVariable()
-        {
-            var source = @"
-using ""A"" prefixed ""a_""
-cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU
-    OtherCpu: a_cpu";
-
-            var a = @"
-cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU";
-
-            ProcessSource(null, source, a);
-        }
-
-        [Test]
-        public void ShouldFindNestedPrefixedVariable()
-        {
-            var source = @"
-using ""A"" prefixed ""a_""
-using ""B""
-someCpu: Antmicro.Renode.UnitTests.Mocks.MockCPU
-    OtherCpu: a_b_cpu
-
-oneMoreCpu: Antmicro.Renode.UnitTests.Mocks.MockCPU { OtherCpu: cpu }
-";
-
-            var a = @"
-using ""B"" prefixed ""b_""";
-
-            var b = @"
-cpu: Antmicro.Renode.UnitTests.Mocks.MockCPU";
-
-            ProcessSource(null, source, a, b);
         }
 
         [Test]
@@ -310,20 +275,6 @@ cpu:
         }
 
         [Test]
-        public void ShouldHandleIrqDestinationOnPrefixing()
-        {
-            var a = @"
-cpu: Antmicro.Renode.UnitTests.Mocks.MockReceiver
-sender: Antmicro.Renode.UnitTests.Mocks.MockIrqSender
-    Irq -> cpu@0";
-
-            var source = @"
-using ""A"" prefixed ""sth_""";
-
-            ProcessSource(null, source, a);
-        }
-
-        [Test]
         public void ShouldFailOnRecurringUsings()
         {
             var b = @"
@@ -367,10 +318,13 @@ using ""A""";
             Assert.AreEqual(ParsingError.UsingFileNotFound, exception.Error);
         }
 
-#if PLATFORM_WINDOWS
         [Test]
-        public void ShouldHandleAbsolutePath()
+        public void ShouldHandleAbsolutePathWindows()
         {
+            if(!RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             // On Windows, both \ and / should work as path component separators in the path to be resolved
             // and the returned path should always use the preferred \ separator
             Assert.AreEqual(@"C:\tmp\platform.repl", ResolvePath(@"C:\tmp\platform.repl", @"C:\tmp\includer.repl"));
@@ -378,44 +332,67 @@ using ""A""";
         }
 
         [Test]
-        public void ShouldHandleRelativePathInSameDirectory()
+        public void ShouldHandleRelativePathInSameDirectoryWindows()
         {
+            if(!RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             Assert.AreEqual(@"C:\tmp\platform.repl", ResolvePath(@".\platform.repl", @"C:\tmp\includer.repl"));
             Assert.AreEqual(@"C:\tmp\platform.repl", ResolvePath(@"./platform.repl", @"C:\tmp\includer.repl"));
         }
 
         [Test]
-        public void ShouldHandleRelativePathInParentDirectory()
+        public void ShouldHandleRelativePathInParentDirectoryWindows()
         {
+            if(!RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             Assert.AreEqual(@"C:\abc\platform.repl", ResolvePath(@"..\abc\platform.repl", @"C:\tmp\includer.repl"));
             Assert.AreEqual(@"C:\abc\platform.repl", ResolvePath(@"../abc/platform.repl", @"C:\tmp\includer.repl"));
         }
-#else
+
         [Test]
-        public void ShouldHandleAbsolutePath()
+        public void ShouldHandleAbsolutePathUnix()
         {
+            if(RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             Assert.AreEqual("/tmp/platform.repl", ResolvePath("/tmp/platform.repl", "/tmp/includer.repl"));
         }
 
         [Test]
-        public void ShouldHandleRelativePathInSameDirectory()
+        public void ShouldHandleRelativePathInSameDirectoryUnix()
         {
+            if(RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             Assert.AreEqual("/tmp/platform.repl", ResolvePath("./platform.repl", "/tmp/includer.repl"));
         }
 
         [Test]
-        public void ShouldHandleRelativePathInParentDirectory()
+        public void ShouldHandleRelativePathInParentDirectoryUnix()
         {
+            if(RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             Assert.AreEqual("/abc/platform.repl", ResolvePath("../abc/platform.repl", "/tmp/includer.repl"));
         }
 
         [Test]
         public void BackslashShouldNotBePathSeparatorOnUnix()
         {
+            if(RuntimeInfo.IsWindows())
+            {
+                Assert.Ignore();
+            }
             // Backslashes are a valid filename character on Unix
             Assert.AreEqual(@"/tmp/plat\form.repl", ResolvePath(@"./plat\form.repl", "/tmp/includer.repl"));
         }
-#endif
 
         [SetUp]
         public void SetUp()

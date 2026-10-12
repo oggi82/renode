@@ -10,7 +10,7 @@ ${PLAT_ARM64}                       SEPARATOR=\n  """
 ...                                 ${SPACE*4}genericInterruptController: gic
 ...
 ...                                 gic: IRQControllers.ARM_GenericInterruptController
-...                                 ${SPACE*4}architectureVersion: IRQControllers.ARM_GenericInterruptControllerVersion.GICv2
+...                                 ${SPACE*4}architectureVersion: .GICv2
 ...                                 """
 ${PLAT_ARMv8R}                      SEPARATOR=\n  """
 ...                                 cpu: CPU.ARMv8R @ sysbus
@@ -77,12 +77,12 @@ ${PROG_POWERPC}                     SEPARATOR=\n
 
 *** Keywords ***
 Create Machine
-    [Arguments]                     ${PLAT}  ${PROG}
+    [Arguments]                     ${PLAT}  ${PROG}  ${TRIPLE}=null
     Execute Command                 using sysbus
     Execute Command                 mach create
     Execute Command                 machine LoadPlatformDescriptionFromString ${PLAT}
     Configure Machine
-    Execute Command                 sysbus.cpu AssembleBlock ${starting_pc} "${PROG}"
+    Execute Command                 sysbus.cpu AssembleBlock ${starting_pc} "${PROG}" triple=${TRIPLE}
 
 Create Machine Xtensa
     Execute Command                 using sysbus
@@ -116,13 +116,13 @@ Configure Machine
     Execute Command                 logLevel -1
 
 Syncing Enabled Template
-    [Arguments]                     ${PLAT}  ${PROG}
-    Create Machine                  ${PLAT}  ${PROG}
+    [Arguments]                     ${PLAT}  ${PROG}  ${TRIPLE}=null
+    Create Machine                  ${PLAT}  ${PROG}  ${TRIPLE}
     Test SyncPCEveryInstructionDisabled False
 
 Syncing Disabled Template
-    [Arguments]                     ${PLAT}  ${PROG}
-    Create Machine                  ${PLAT}  ${PROG}
+    [Arguments]                     ${PLAT}  ${PROG}  ${TRIPLE}=null
+    Create Machine                  ${PLAT}  ${PROG}  ${TRIPLE}
     Test SyncPCEveryInstructionDisabled True
 
 # Tests run a loop of nops, after first loop translation blocks should be chained, then a hook can verify that the PC is updated between the blocks
@@ -156,9 +156,9 @@ Test SyncPCEveryInstructionDisabled False
 *** Test Cases ***
 Should Report Wrong PC Between Chained Blocks
     [Template]                      Syncing Disabled Template
-    ${PLAT_ARM}                     ${PROG_ARM}
-    ${PLAT_ARM64}                   ${PROG_ARM}
-    ${PLAT_ARMv8R}                  ${PROG_ARM}
+    ${PLAT_ARM}                     ${PROG_ARM}      "armv7r"
+    ${PLAT_ARM64}                   ${PROG_ARM}      "arm64"
+    ${PLAT_ARMv8R}                  ${PROG_ARM}      "armv8r"
     ${PLAT_ARM-M}                   ${PROG_ARM}
     ${PLAT_POWERPC}                 ${PROG_POWERPC}
     ${PLAT_SPARC}                   ${PROG_SPARC}
@@ -167,12 +167,12 @@ Should Report Wrong PC Between Chained Blocks
 Should Report Correct PC Between Chained Blocks
     [Template]                      Syncing Enabled Template
     ${PLAT_RISCV}                   ${PROG_RISCV}
-    ${PLAT_ARM}                     ${PROG_ARM}
-    ${PLAT_ARM64}                   ${PROG_ARM}
-    ${PLAT_ARMv8R}                  ${PROG_ARM}
+    ${PLAT_ARM}                     ${PROG_ARM}      "armv7r"
+    ${PLAT_ARM64}                   ${PROG_ARM}      "arm64"
+    ${PLAT_ARMv8R}                  ${PROG_ARM}      "armv8r"
     ${PLAT_ARM-M}                   ${PROG_ARM}
     ${PLAT_POWERPC}                 ${PROG_POWERPC}
-    ${PLAT_X86}                     ${PROG_X86}
+    ${PLAT_X86}                     ${PROG_X86}      "i386"
     ${PLAT_SPARC}                   ${PROG_SPARC}
 
 # Separate path for Xtensa as it's currently not supported by Renode's LLVM assembly

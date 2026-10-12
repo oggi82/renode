@@ -1,0 +1,42 @@
+mach create "coralnpu-client"
+$client_port ?= 3345
+
+# Raise log level for emulation to avoid `machine paused` and `machine resumed` logs when advancing time
+logLevel 3 "coralnpu-client" false
+
+logFile @externally_controlled_renode.log
+
+machine LoadPlatformDescriptionFromString "npu: CPU.CoralNPU @ sysbus 0xE00000000"
+machine LoadPlatformDescriptionFromString "dma_memory: Bus.ExternalControlBusPeripheral @ sysbus 0x29000000 {size: 0x1000}"
+
+machine LoadPlatformDescriptionFromString """
+simple_dma: Python.PythonPeripheral @ sysbus 0x29100000
+    size: 0x20
+    initable: true
+    filename: "scripts/complex/coral_npu/external_control/simple_dma.py"
+"""
+
+emulation CreateExternalControlClient "client" $client_port
+
+python """
+_NPU_PATH = "sysbus.CoralNPU_RVV"
+
+def mc_coralStats_reset(line=None):
+    mc_coralStats_reset.last = monitor.Machine[_NPU_PATH].ExecutedInstructions
+
+def mc_coralStats_print(line=None):
+    current = monitor.Machine[_NPU_PATH].ExecutedInstructions - mc_coralStats_reset.last
+    print "  %-20s %d (last run)" % ("Executed NPU (CoralNPU_RVV) instructions:", current)
+
+    # The NPU core resets on each run, which also resets instruction counting
+    mc_coralStats_reset.last = 0
+
+mc_coralStats_reset.last = 0
+"""
+
+emulation SetAdvanceImmediately true
+
+client SynchronizeTimeWithExternal
+client AttachCustomCommandCallbackToMonitor
+client RegisterRemoteBusPeripheral "coralnpu-client" "frdm_imx8mp" "npu" AnyWidth ReadWrite
+client RegisterRemoteBusPeripheral "coralnpu-client" "frdm_imx8mp" "dma" AnyWidth ReadWrite

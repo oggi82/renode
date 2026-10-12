@@ -1,0 +1,111 @@
+*** Variables ***
+${PLATFORM}                         platforms/boards/nucleo_h753zi.repl
+${ZEPHYR420_BIN}                    https://dl.antmicro.com/projects/renode/nucleo_h753zi--zephyr-samples_sensor_light_polling.elf-s_599280-f102efd2fb21d8f68de76386291728850712f935
+${ZEPHYR440_BIN}                    https://dl.antmicro.com/projects/renode/nucleo_h753zi--zephyr-samples_sensor_light_polling.elf-s_651864-d677ebdfc1b651141b4cb13f4328dd64bb397bce
+${SHELL_BIN}                        https://dl.antmicro.com/projects/renode/nucleo_h753zi--zephyr-shell_veml7700.elf-s_2785056-f485a1c4ad61b5f436643118ab2cf1f6b16aeb43
+${UART}                             sysbus.usart3
+${SENSOR}                           sysbus.i2c1.als
+${CSV2RESD}                         ${RENODETOOLS}/csv2resd/csv2resd.py
+${SAMPLES_CSV}                      ${CURDIR}/veml7700-samples.csv
+
+*** Keywords ***
+Create Machine
+    [Arguments]                     ${bin}
+    Execute Command                 mach create
+    Execute Command                 machine LoadPlatformDescription @${PLATFORM}
+    Execute Command                 machine LoadPlatformDescriptionFromString "als: Sensors.VEML7700 @ i2c1 0x10"
+    Execute Command                 sysbus LoadELF @${bin}
+    Create Terminal Tester          ${UART}
+
+Set Enviroment
+    [Arguments]                     ${illuminance}
+    Execute Command                 ${SENSOR} Illuminance ${illuminance}
+
+Check Enviroment
+    [Arguments]                     ${illuminance}
+    Wait For Line On Uart           lux: ${illuminance}
+
+Create RESD File
+    [Arguments]                     ${path}
+    ${resd_path}=                   Allocate Temporary File
+    ${args}=                        Catenate  SEPARATOR=,
+    ...                             "--input", r"${path}"
+    ...                             "--map", "illuminance:illuminance::0"
+    ...                             "--start-time", "0"
+    ...                             "--frequency", "1"
+    ...                             r"${resd_path}"
+    Evaluate                        subprocess.run([sys.executable, "${CSV2RESD}", ${args}])  sys,subprocess
+    RETURN                          ${resd_path}
+
+Create Timestamped RESD File
+    [Arguments]                     ${path}
+    ${resd_path}=                   Allocate Temporary File
+    ${args}=                        Catenate  SEPARATOR=,
+    ...                             "--input", r"${path}"
+    ...                             "--map", "illuminance:illuminance::0"
+    ...                             "--start-time", "0"
+    ...                             "--timestamp", "timestamp"
+    ...                             r"${resd_path}"
+    Evaluate                        subprocess.run([sys.executable, "${CSV2RESD}", ${args}])  sys,subprocess
+    RETURN                          ${resd_path}
+
+*** Test Cases ***
+Should Read Illuminance
+    Create Machine                  ${ZEPHYR420_BIN}
+
+    Check Enviroment                illuminance=0
+
+    # The closest VEML7700 illuminance value for any lux value is usually slightly under the true value,
+    # and Zephyr rounds down to the nearest lux
+    Set Enviroment                  illuminance=500
+    Check Enviroment                illuminance=499
+
+    Set Enviroment                  illuminance=30
+    Check Enviroment                illuminance=29
+
+    Set Enviroment                  illuminance=10000.5
+    Check Enviroment                illuminance=10000
+
+Should Read Samples From RESD
+    Create Machine                  ${ZEPHYR420_BIN}
+
+    ${resd_path}=                   Create RESD File  ${SAMPLES_CSV}
+    Execute Command                 ${SENSOR} FeedIlluminanceSamplesFromRESD @${resd_path}
+
+    Check Enviroment                0
+    Check Enviroment                499
+    Check Enviroment                12000
+    Check Enviroment                12000
+
+Should Read Samples From Timestamped RESD
+    Create Machine                  ${ZEPHYR420_BIN}
+
+    ${resd_path}=                   Create Timestamped RESD File  ${SAMPLES_CSV}
+    Execute Command                 ${SENSOR} FeedIlluminanceSamplesFromRESD @${resd_path}
+
+    Check Enviroment                0
+    Check Enviroment                499
+    Check Enviroment                12000
+    Check Enviroment                12000
+
+Should Work After Errata Driver Update
+    Create Machine                  ${ZEPHYR440_BIN}
+
+    Check Enviroment                illuminance=0
+
+    Set Enviroment                  illuminance=500
+    Check Enviroment                illuminance=499
+
+Should Work From Zephyr Shell
+    Create Machine                  ${SHELL_BIN}
+    Wait For Prompt On Uart         uart:~$
+
+    Set Enviroment                  illuminance=500
+
+    Write Line To Uart              sensor get veml7700@10 light
+    Wait For Line On Uart           .*\(498.9*\)  treatAsRegex=true
+
+    Set Enviroment                  illuminance=1000
+
+    Write Line To Uart              sensor get veml7700@10 light
+    Wait For Line On Uart           .*\(999.0*\)  treatAsRegex=true
