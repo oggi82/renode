@@ -105,11 +105,13 @@ usic0ch0: UART.XMC4XXX_USIC @ sysbus <0x40030000, +0x200>
 
 usic0ch1: UART.XMC4XXX_USIC @ sysbus <0x40030200, +0x200>
     scu: scu
-    [0-5] -> nvic@[84-89]
+    [0-1] -> nvic@[84-85] | dlr@[46-47]
+    [2-5] -> nvic@[86-89]
 
 usic1ch0: UART.XMC4XXX_USIC @ sysbus <0x48020000, +0x200>
     scu: scu
-    [0-5] -> nvic@[90-95]
+    [0-1] -> nvic@[90-91] | dlr@[48-49]
+    [2-5] -> nvic@[92-95]
 
 usic1ch1: UART.XMC4XXX_USIC @ sysbus <0x48020200, +0x200>
     scu: scu
@@ -118,11 +120,13 @@ usic1ch1: UART.XMC4XXX_USIC @ sysbus <0x48020200, +0x200>
 
 usic2ch0: UART.XMC4XXX_USIC @ sysbus <0x48024000, +0x200>
     scu: scu
-    [0-5] -> nvic@[96-101]
+    [0-1] -> nvic@[96-97] | dlr@[50-51]
+    [2-5] -> nvic@[98-101]
 
 usic2ch1: UART.XMC4XXX_USIC @ sysbus <0x48024200, +0x200>
     scu: scu
-    [0-5] -> nvic@[96-101]
+    [0-1] -> nvic@[96-97] | dlr@[50-51]
+    [2-5] -> nvic@[98-101]
 
 // MultiCAN (CAN0); the eight service request lines SR0-SR7 are NVIC interrupts 76-83 (CAN0_0_IRQn ... CAN0_7_IRQn)
 can0: CAN.XMC4XXX_CAN @ sysbus 0x48014000
@@ -287,12 +291,12 @@ gpdma0: DMA.XMC4XXX_GPDMA @ sysbus 0x50014000
     dlr: dlr
     firstDlrLine: 0
     numberOfChannels: 8
+    transferFrequency: 36000000
     IRQ -> nvic@105
 
 gpdma1: DMA.XMC4XXX_GPDMA @ sysbus 0x50018000
     dlr: dlr
     firstDlrLine: 8
     numberOfChannels: 4
+    transferFrequency: 36000000
     IRQ -> nvic@110
-
-// DMA request sources (numbering see XMC4XXX_DLR): CCU40-43 SR0/SR1, CAN SR0-3, DAC SR0/1, VADC, USIC0/1 SR0/1
