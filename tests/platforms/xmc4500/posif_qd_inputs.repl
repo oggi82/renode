@@ -1,0 +1,7 @@
+// Test extension for POSIF_QD: phase A on P14.7 and phase B on P14.6 (README), routed to POSIF0.IN0B and IN1B.
+// The CCU81 timers of the example (phase signal generation) run unconnected, only their period match flag paces the output lines.
+phaseA: Miscellaneous.Button @ port14 7
+    -> port14@7 | posif0@1
+
+phaseB: Miscellaneous.Button @ port14 6
+    -> port14@6 | posif0@5
