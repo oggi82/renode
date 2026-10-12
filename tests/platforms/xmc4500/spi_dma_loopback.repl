@@ -1,0 +1,2 @@
+// MISO wired to MOSI on USIC1 channel 0 (select line 0), as the SPI_DMA example expects
+spiLoopback: Mocks.SpiLoopbackDevice @ usic1ch0 0
