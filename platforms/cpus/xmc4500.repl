@@ -116,3 +116,43 @@ scu:
     1 -> ccu41@8
     2 -> ccu42@8
     3 -> ccu43@8
+
+// Flexible CRC Engine (FCE), service request is NVIC interrupt 104
+fce: CRC.XMC4XXX_FCE @ sysbus 0x50020000
+    IRQ -> nvic@104
+
+// DMA line router (inside the SCU address range) and the general purpose DMA units; GPDMA0 SR is NVIC 105, GPDMA1 SR is NVIC 110
+dlr: DMA.XMC4XXX_DLR @ sysbus 0x50004900
+
+gpdma0: DMA.XMC4XXX_GPDMA @ sysbus 0x50014000
+    dlr: dlr
+    firstDlrLine: 0
+    numberOfChannels: 8
+    IRQ -> nvic@105
+
+gpdma1: DMA.XMC4XXX_GPDMA @ sysbus 0x50018000
+    dlr: dlr
+    firstDlrLine: 8
+    numberOfChannels: 4
+    IRQ -> nvic@110
+
+// DMA request sources (numbering see XMC4XXX_DLR): CCU40-43 SR0/SR1, CAN SR0-3, DAC SR0/1, VADC, USIC0/1 SR0/1
+ccu40:
+    [0-1] -> dlr@[30-31]
+ccu41:
+    [0-1] -> dlr@[32-33]
+ccu42:
+    [0-1] -> dlr@[34-35]
+ccu43:
+    [0-1] -> dlr@[36-37]
+can0:
+    [0-3] -> dlr@[42-45]
+dac:
+    [0-1] -> dlr@[28-29]
+vadc:
+    [0-15] -> dlr@[8-23]
+    [16-19] -> dlr@[4-7]
+usic0ch0:
+    [0-1] -> dlr@[46-47]
+usic1ch1:
+    [0-1] -> dlr@[48-49]
