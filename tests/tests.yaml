@@ -72,6 +72,7 @@
 - tests/platforms/xmc4500/scu-wdt-rtc.robot
 - tests/platforms/xmc4500/gpio-eru.robot
 - tests/platforms/xmc4500/dma-fce.robot
+- tests/platforms/xmc4500/ccu8.robot
 - tests/unit-tests/riscv-custom-instructions.robot
 - tests/unit-tests/riscv-lr-sc-instructions.robot
 - tests/metrics-analyzer/metrics-analyzer.robot
