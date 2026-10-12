@@ -1,0 +1,10 @@
+// Test extension for POSIF_Hall: hall sensor inputs on P14.7, P14.6, P14.5 (README), routed to POSIF0.IN0B, IN1B, IN2B.
+// The CCU80 timers of the example (hall signal generation) run unconnected, only their period match flag is used by the firmware.
+hall1: Miscellaneous.Button @ port14 7
+    -> port14@7 | posif0@1
+
+hall2: Miscellaneous.Button @ port14 6
+    -> port14@6 | posif0@5
+
+hall3: Miscellaneous.Button @ port14 5
+    -> port14@5 | posif0@9
