@@ -1,0 +1,10 @@
+// Test extension: LEDs on the outputs of CCU80 slice 2 (connections 12-15 = OUT20-OUT23) and slice 3 OUT31 (connection 17).
+// They stand in for the port alternate functions, so that duty cycle and dead time can be measured over virtual time.
+out20Led: Miscellaneous.LED @ port2 0
+out21Led: Miscellaneous.LED @ port2 1
+out31Led: Miscellaneous.LED @ port2 2
+
+ccu80:
+    12 -> out20Led@0
+    13 -> out21Led@0
+    17 -> out31Led@0
