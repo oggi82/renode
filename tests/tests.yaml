@@ -75,6 +75,7 @@
 - tests/platforms/xmc4500/ccu8.robot
 - tests/platforms/xmc4500/posif.robot
 - tests/platforms/xmc4500/usic.robot
+- tests/platforms/xmc4500/rtos-misc.robot
 - tests/unit-tests/riscv-custom-instructions.robot
 - tests/unit-tests/riscv-lr-sc-instructions.robot
 - tests/metrics-analyzer/metrics-analyzer.robot
